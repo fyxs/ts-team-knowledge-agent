@@ -7,9 +7,10 @@ from ts_knowledge_agent.adapters.mineru_adapter import MinerUConverter
 from ts_knowledge_agent.adapters.excel_adapter import convert_excel
 
 CONVERTER_VERSION = "mineru-3.4.5"
-SUPPORTED_DIRECT_COPY_EXTENSIONS = frozenset({".md", ".txt"})
+SUPPORTED_DIRECT_COPY_EXTENSIONS = frozenset({".md"})
+SUPPORTED_TEXT_EXTENSIONS = frozenset({".txt"})
 SUPPORTED_MINERU_EXTENSIONS = frozenset({".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx", ".pdf"})
-SUPPORTED_EXTENSIONS = SUPPORTED_DIRECT_COPY_EXTENSIONS | SUPPORTED_MINERU_EXTENSIONS
+SUPPORTED_EXTENSIONS = SUPPORTED_DIRECT_COPY_EXTENSIONS | SUPPORTED_TEXT_EXTENSIONS | SUPPORTED_MINERU_EXTENSIONS
 class Converter(Protocol):
     def convert(self, source: Path) -> str: ...
 def is_supported(source: Path) -> bool: return source.suffix.lower() in SUPPORTED_EXTENSIONS
@@ -19,6 +20,18 @@ class ConversionResult:
     source_path: Path
     output_path: Path
     bytes_written: int
+
+def _decode_text(source: Path) -> str:
+    raw = source.read_bytes()
+    if b"\x00" in raw:
+        raise ValueError(f"text source appears to be binary: {source}")
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeError(f"unable to decode text source as UTF-8 or GB18030: {source}")
+
 def convert_file(source: Path, output: Path, converter: Converter | None = None, mineru_python: str | Path | None = None) -> ConversionResult:
     source=source.expanduser().resolve(); output=output.expanduser().resolve()
     if not source.is_file(): raise FileNotFoundError(f"source file does not exist: {source}")
@@ -27,6 +40,7 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
     output.parent.mkdir(parents=True, exist_ok=True)
     if converter is not None: output.write_text(converter.convert(source), encoding="utf-8")
     elif is_direct_copy(source): shutil.copy2(source, output)
-    elif source.suffix.lower() in {".xls", ".xlsx"}: convert_excel(source, output)
+    elif source.suffix.lower() == ".txt": output.write_text(_decode_text(source), encoding="utf-8")
+    elif source.suffix.lower() == ".xlsx": convert_excel(source, output)
     else: MinerUConverter(mineru_python).convert_to(source, output)
     return ConversionResult(source, output, output.stat().st_size)
