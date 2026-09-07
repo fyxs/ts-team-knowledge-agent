@@ -29,7 +29,7 @@ tests/      自动化测试
 api/            HTTP/AG-UI 接口层，只做协议适配
 cli/            CLI 表现层，只做参数解析和输出
 services/       应用用例和业务流程
-adapters/       MarkItDown、Harness、Git 等外部依赖适配
+adapters/       MinerU、Harness、Git 等外部依赖适配
 repositories/   SQLite、索引和本地状态访问
 workers/        定时任务和后台执行
 models/         数据模型和 Schema
@@ -74,7 +74,7 @@ src/lib/         无业务含义的通用工具
 
 ```text
 scanner       本地源目录扫描和变化检测
-converter     MarkItDown 转换
+converter     MinerU 转换
 extraction    模型驱动的知识提炼
 indexer       SQLite/FTS5 索引
 sync          固定 Git 知识仓同步

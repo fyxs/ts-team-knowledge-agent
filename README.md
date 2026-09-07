@@ -5,7 +5,7 @@
 - 前端：React + TypeScript + Vite + `@assistant-ui/react`
 - 后端：FastAPI + Python
 - 本地状态和索引：SQLite + FTS5
-- 材料转换：MarkItDown（由应用运行环境管理）
+- 材料转换：MinerU（由应用运行环境管理）
 - 模型：沿用当前 Harness 工作模型
 - Agent 事件协议：AG-UI；默认 SSE，WebSocket 后置
 - 共享知识：固定 Git 仓 `git@github.com:fyxs/ts-knowledge-base.git`

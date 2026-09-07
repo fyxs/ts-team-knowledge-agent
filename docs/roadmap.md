@@ -7,7 +7,7 @@
 - AG-UI 协议边界（默认 SSE）
 - CLI 初始化与成员空间配置
 - 每小时源目录扫描
-- MarkItDown 转换
+- MinerU 转换
 - 知识沉淀到固定 Git 仓成员空间
 - SQLite 元数据与 FTS5 搜索
 - 每小时 Git 批次同步

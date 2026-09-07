@@ -5,13 +5,13 @@
 ## 当前状态
 
 - [x] 项目独立 Python 运行环境（`.venv`）
-- [x] 项目依赖声明 MarkItDown
+- [x] 项目依赖声明 MinerU
 - [x] CLI 包结构
 - [x] 配置基础读取
 - [x] 本地源目录递归扫描
 - [x] SHA-256 文件登记
 - [x] SQLite `sources` 状态记录
-- [x] MarkItDown 单文件转换
+- [x] MinerU 单文件转换
 - [x] `ts-kb scan` 基础命令
 - [x] `ts-kb convert` 基础命令
 - [x] `ts-kb status` 基础命令
@@ -44,12 +44,12 @@
 - [ ] 配置 `personal_personal-workspace` 和本地源目录。
 - [x] 创建 working_directory 下的配置、data、logs、runtime 和共享知识仓目录。
 - [x] 根据 shared_knowledge_repository_url 拉取共享知识仓到 working_directory；拉取失败则初始化失败。
-- [x] 检查 Python、MarkItDown、Git 和 SQLite 运行条件。
+- [x] 检查 Python、MinerU、Git 和 SQLite 运行条件。
 - [ ] 不把本地配置、SQLite、日志和原始素材写入 Git。
 
 ## 第四阶段：知识候选沉淀
 
-- [ ] 将转换材料写入 `members/<personal_personal-workspace>/converted/`。
+- [ ] 将转换材料写入 `members/<personal_personal-workspace>/`。
 - [ ] 生成带 YAML frontmatter 的候选知识 Markdown。
 - [ ] 写入 `members/<personal_personal-workspace>/knowledge/candidate/`。
 - [ ] 建立知识与源文件、转换结果的可追溯关系。

@@ -11,7 +11,7 @@ React Web UI（@assistant-ui/react）
         ↓ AG-UI 事件协议
 本地 FastAPI API / 服务层
         ├── 扫描器：每小时扫描本地知识源
-        ├── 转换器：内置运行环境中的 MarkItDown
+        ├── 转换器：内置运行环境中的 MinerU
         ├── 提炼器：沿用 Harness 工作模型
         ├── 索引器：SQLite + FTS5
         ├── Git 适配器：固定 ts-team-knowledge-base

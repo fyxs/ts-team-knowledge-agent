@@ -30,7 +30,7 @@ CLI、Web 和调度器不得各自实现扫描、转换、索引或 Git 同步�
 - 前端统一使用 React，不引入 Vue。
 - UI 组件优先使用 `@assistant-ui/react` 系列；AG-UI 是客户端与 Agent 的协议边界。
 - 后端使用 FastAPI；本地状态和全文索引使用 SQLite/FTS5。
-- MarkItDown、Harness 和 Git 通过适配器接入。
+- MinerU、Harness 和 Git 通过适配器接入。
 - Git 远端知识仓固定为 `git@github.com:fyxs/ts-team-knowledge-base.git`，不在普通初始化流程开放切换。
 - 单公司模式；成员个人空间在初始化时配置，成员知识写入隔离、读取共享。
 

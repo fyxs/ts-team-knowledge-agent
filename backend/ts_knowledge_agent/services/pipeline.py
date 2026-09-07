@@ -49,14 +49,14 @@ def run_once(settings: Settings, sync: bool = False, batch_size: int = 25, conve
         seen = {source.relative_path for source in sources}
         for source in sources:
             state.upsert_source(source)
-        pending = [source for source in sources if state.needs_conversion(source)]
+        pending = [source for source in sources if source.supported and state.needs_conversion(source)]
         batches = plan_batches(pending, batch_size)
         for batch in batches:
             if on_batch: on_batch(batch)
             for source in batch.files:
                 output = output_path_for(settings, source.relative_path)
                 try:
-                    result = convert_file(source.absolute_path, output, converter=converter)
+                    result = convert_file(source.absolute_path, output, converter=converter, mineru_python=settings.mineru_python)
                     state.record_conversion(source.relative_path, source.sha256, result.output_path, CONVERTER_VERSION, "converted")
                     converted += 1
                 except Exception as exc:

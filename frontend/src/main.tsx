@@ -41,7 +41,7 @@ function App() {
           </div>
           <p>成员按自己的习惯放置材料，Agent 负责扫描、转换、提炼和沉淀；不移动、不覆盖、不删除源文件。</p>
           <div className="flow">
-            {["本地源目录", "MarkItDown", "知识沉淀", "Git 仓"].map((item, index) => <React.Fragment key={item}><span>{item}</span>{index < 3 && <b>→</b>}</React.Fragment>)}
+            {["本地源目录", "MinerU", "知识沉淀", "Git 仓"].map((item, index) => <React.Fragment key={item}><span>{item}</span>{index < 3 && <b>→</b>}</React.Fragment>)}
           </div>
           <button className="primary-action" type="button" disabled>初始化本地空间 <span>即将支持</span></button>
         </article>
