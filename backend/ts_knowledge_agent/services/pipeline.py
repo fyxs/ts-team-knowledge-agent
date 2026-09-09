@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 from ts_knowledge_agent.config import Settings
@@ -29,6 +29,7 @@ class RunSummary:
     missing:int=0
     indexed:int=0
     sync_status:str="disabled"
+    reason_counts: dict[str,int] = field(default_factory=dict)
 
 def output_path_for(settings: Settings, relative_path: str) -> Path:
     relative=Path(relative_path)
@@ -37,28 +38,34 @@ def output_path_for(settings: Settings, relative_path: str) -> Path:
 
 def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
     state=StateStore(settings.shared_knowledge_repository_directory/"data"/"state.sqlite3")
-    converted=skipped=failed=0
+    converted=skipped=failed=0; reason_counts:dict[str,int]={}
     try:
         recovered=state.recover_stale_processing()
+        if recovered: reason_counts["stale_processing_recovered"]=recovered
         sources=scan_directory(settings.shared_source_directory)
         seen={source.relative_path for source in sources}
         for source in sources: state.upsert_source(source)
-        pending=[source for source in sources if source.supported and state.needs_conversion(source)]
-        batches=plan_batches(pending,batch_size)
+        pending=[]
+        for source in sources:
+            reason="unsupported" if not source.supported else state.conversion_reason(source)
+            reason_counts[reason]=reason_counts.get(reason,0)+1
+            if source.supported and reason!="unchanged": pending.append((source,reason))
+        batches=plan_batches([source for source,_ in pending],batch_size)
+        reason_by_path={source.relative_path:reason for source,reason in pending}
         for batch in batches:
             if on_batch: on_batch(batch)
             for source in batch.files:
-                output=output_path_for(settings,source.relative_path)
+                output=output_path_for(settings,source.relative_path); reason=reason_by_path[source.relative_path]
                 try:
-                    state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing")
+                    state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
-                    state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"converted")
+                    state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"converted",reason=reason)
                     converted+=1
                 except Exception as exc:
-                    state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc))
+                    state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc),reason=reason)
                     failed+=1
-        skipped=len(sources)-len(pending)
+        skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)
         missing=state.mark_missing_sources(seen)
         indexed=index_converted(settings)
-        return RunSummary(len(sources),len(pending),len(batches),converted,skipped,failed,missing,indexed)
+        return RunSummary(len(sources),len(pending),len(batches),converted,skipped,failed,missing,indexed,reason_counts=reason_counts)
     finally: state.close()
