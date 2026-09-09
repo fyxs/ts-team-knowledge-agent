@@ -8,6 +8,7 @@ from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_fil
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
 from ts_knowledge_agent.services.run_lock import RunLock
+from ts_knowledge_agent.services.quality import inspect_markdown_file
 
 @dataclass(frozen=True)
 class ProcessingBatch:
@@ -64,6 +65,11 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                 try:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
+                    quality = inspect_markdown_file(result.output_path)
+                    if not quality.ok:
+                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"quality_failed","; ".join(quality.errors),reason="quality_failed")
+                        failed += 1
+                        continue
                     state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"converted",reason=reason)
                     converted+=1
                 except Exception as exc:
