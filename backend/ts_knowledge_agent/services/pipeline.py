@@ -7,6 +7,7 @@ from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_file
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
+from ts_knowledge_agent.services.run_lock import RunLock
 
 @dataclass(frozen=True)
 class ProcessingBatch:
@@ -37,6 +38,10 @@ def output_path_for(settings: Settings, relative_path: str) -> Path:
     return document_dir / f"{relative.stem}.md"
 
 def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
+    with RunLock(settings.working_directory):
+        return _run_once_locked(settings, sync, batch_size, converter, on_batch)
+
+def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
     state=StateStore(settings.shared_knowledge_repository_directory/"data"/"state.sqlite3")
     converted=skipped=failed=0; reason_counts:dict[str,int]={}
     try:
