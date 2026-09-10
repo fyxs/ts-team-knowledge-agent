@@ -17,7 +17,7 @@ def convert_excel(source: Path, output: Path, max_rows: int=DEFAULT_SHEET_ROWS) 
         def flush():
             nonlocal chunk,part,total
             if not chunk: return
-            safe=re.sub(r"[^0-9A-Za-z_-]+","_",ws.title).strip("_") or f"Sheet{ws._id}"; name=f"{safe}.md" if part==1 else f"{safe}-{part:03d}.md"; target=sheets_dir/name
+            safe=re.sub(r"[^0-9A-Za-z_-]+","_",ws.title).strip("_") or f"Sheet{part}"; name=f"{safe}.md" if part==1 else f"{safe}-{part:03d}.md"; target=sheets_dir/name
             lines=[f"# {ws.title}" if part==1 else f"# {ws.title} (part {part})","","| "+" | ".join(headers)+" |","|"+"|".join("---" for _ in headers)+"|"]
             lines += ["| "+" | ".join(_clean(v) for v in row[:len(headers)])+" |" for row in chunk]; target.write_text("\n".join(lines)+"\n",encoding="utf-8"); files.append(target); total+=target.stat().st_size; chunk=[]; part+=1
         for row in rows:
