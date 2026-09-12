@@ -9,7 +9,7 @@ from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.indexing import search_converted
 from ts_knowledge_agent.services.pipeline import run_once
-from ts_knowledge_agent.services.scheduler import run_scheduler
+from ts_knowledge_agent.services.scheduler import run_once_with_report, run_scheduler
 from ts_knowledge_agent.services.scanner import scan_directory
 
 
@@ -56,7 +56,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         source = args.file.expanduser().resolve(); output = args.output or settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace / "converted" / f"{source.stem}.md"; result = convert_file(source, output); print(f"converted={result.output_path} bytes={result.bytes_written}"); return 0
     if args.command == "run-once":
         if args.batch_size < 1: parser.error("batch-size must be at least 1")
-        summary = run_once(settings, sync=args.sync, batch_size=args.batch_size); print(f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} skipped={summary.skipped} failed={summary.failed} missing={summary.missing} indexed={summary.indexed} sync={summary.sync_status}"); return 1 if summary.failed or summary.sync_status in {"blocked_conflict", "push_failed"} else 0
+        summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size); print(f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} skipped={summary.skipped} failed={summary.failed} missing={summary.missing} indexed={summary.indexed} sync={summary.sync_status}"); return 1 if summary.failed or summary.sync_status in {"blocked_conflict", "push_failed"} else 0
     if args.command == "schedule": return run_scheduler(settings)
     if args.command == "status":
         state = StateStore(settings.shared_knowledge_repository_directory / "data" / "state.sqlite3")
