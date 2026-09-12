@@ -16,6 +16,9 @@ class StateStore:
         self.connection.commit()
     def upsert_source(self,source:SourceFile,status:str="discovered")->None:
         self.connection.execute("""INSERT INTO sources(relative_path,size,mtime_ns,sha256,status) VALUES(?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET size=excluded.size,mtime_ns=excluded.mtime_ns,sha256=excluded.sha256,status=excluded.status,updated_at=CURRENT_TIMESTAMP""",(source.relative_path,source.size,source.mtime_ns,source.sha256,status)); self.connection.commit()
+    def update_source_status(self,relative_path:str,status:str)->None:
+        self.connection.execute("UPDATE sources SET status=?,updated_at=CURRENT_TIMESTAMP WHERE relative_path=?",(status,relative_path))
+        self.connection.commit()
     def mark_missing_sources(self,seen_paths:set[str])->int:
         rows=self.connection.execute("SELECT relative_path FROM sources").fetchall(); missing=[r["relative_path"] for r in rows if r["relative_path"] not in seen_paths]
         if missing: self.connection.executemany("UPDATE sources SET status='source_missing',updated_at=CURRENT_TIMESTAMP WHERE relative_path=?",[(p,) for p in missing]); self.connection.commit()
