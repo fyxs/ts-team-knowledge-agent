@@ -5,6 +5,7 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from ts_knowledge_agent.agent.runtime import create_provider_from_env, run_agent
 from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, Settings, initialize_working_directory
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.schemas import write_schema_files
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--prefix")
     listing.add_argument("--limit", type=int, default=200)
 
+    ask = sub.add_parser("ask"); ask.add_argument("question"); ask.add_argument("--max-steps", type=int, default=6)
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -151,6 +153,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "schedule":
         return run_scheduler(settings)
 
+    if args.command == "ask":
+        provider = create_provider_from_env()
+        if provider is None:
+            print("model provider not configured: set TS_TEAM_KB_MODEL_BASE_URL, TS_TEAM_KB_MODEL_API_KEY, TS_TEAM_KB_MODEL_NAME")
+            return 2
+        result = run_agent(settings, args.question, provider, max_steps=args.max_steps)
+        print(json.dumps({"answer": result.answer, "citations": result.citations, "steps": result.steps, "error": result.error, "prompt_version": result.prompt_version}, ensure_ascii=False, indent=2))
+        return 1 if result.error else 0
     if args.command == "schemas":
         for path in write_schema_files(args.output):
             print(path)
