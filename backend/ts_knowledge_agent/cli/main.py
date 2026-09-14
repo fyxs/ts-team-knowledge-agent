@@ -8,6 +8,7 @@ from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, S
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.indexing import search_converted
+from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.pipeline import run_once
 from ts_knowledge_agent.services.scheduler import run_once_with_report, run_scheduler
 from ts_knowledge_agent.services.scanner import scan_directory
@@ -28,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run-once"); run.add_argument("--sync", action="store_true"); run.add_argument("--batch-size", type=int, default=25)
     sub.add_parser("schedule")
     search = sub.add_parser("search"); search.add_argument("query")
+    schemas = sub.add_parser("schemas"); schemas.add_argument("--output", required=True, type=Path)
     return parser
 
 
@@ -62,6 +64,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         state = StateStore(settings.shared_knowledge_repository_directory / "data" / "state.sqlite3")
         try: print(f"sources={len(state.list_sources())} conversions={len(state.list_conversions())} personal_workspace={settings.personal_workspace}")
         finally: state.close()
+        return 0
+    if args.command == "schemas":
+        for path in write_schema_files(args.output): print(path)
         return 0
     if args.command == "search":
         for row in search_converted(settings, args.query): print(f"{row['path']} | {row['title']} | {row['snippet']}")

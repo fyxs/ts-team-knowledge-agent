@@ -11,6 +11,7 @@ from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
 from ts_knowledge_agent.services.run_lock import RunLock
 from ts_knowledge_agent.services.quality import inspect_markdown_file
+from ts_knowledge_agent.services.registries import export_review_records, write_knowledge_registry, write_source_registry
 
 @dataclass(frozen=True)
 class ProcessingBatch:
@@ -94,6 +95,9 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)
         missing=state.mark_missing_sources(seen)
         indexed=index_converted(settings)
+        write_source_registry(settings)
+        write_knowledge_registry(settings)
+        export_review_records(settings)
         sync_status="disabled"
         if sync:
             if reason_counts.get("blocked_secret"): sync_status="blocked_secret"
