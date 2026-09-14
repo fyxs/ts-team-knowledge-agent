@@ -6,8 +6,11 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import os
+
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ts_knowledge_agent.agent.runtime import create_provider, run_agent
@@ -240,3 +243,45 @@ def repository_push() -> dict:
     settings = load_settings()
     result = push_repository(settings.shared_knowledge_repository_directory)
     return {"status": result.status, "commit": result.commit, "message": result.message}
+
+
+def resolve_web_dist() -> Path | None:
+    """定位前端构建产物：优先环境变量，其次仓库内的 frontend/dist。"""
+    configured = os.getenv("TS_KB_WEB_DIST", "").strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+        return candidate if (candidate / "index.html").is_file() else None
+    default = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+    return default if (default / "index.html").is_file() else None
+
+
+def mount_web(application: FastAPI, dist: Path) -> None:
+    """托管前端产物：静态资源 + SPA 兜底。必须在所有 API 路由之后调用。"""
+    assets = dist / "assets"
+    if assets.is_dir():
+        application.mount("/assets", StaticFiles(directory=assets), name="web-assets")
+
+    @application.get("/", include_in_schema=False)
+    def web_index() -> FileResponse:
+        return FileResponse(dist / "index.html")
+
+    @application.get("/{path:path}", include_in_schema=False)
+    def web_fallback(path: str) -> FileResponse:
+        target = (dist / path).resolve()
+        try:
+            target.relative_to(dist.resolve())
+        except ValueError:
+            return FileResponse(dist / "index.html")
+        if target.is_file():
+            return FileResponse(target)
+        return FileResponse(dist / "index.html")
+
+
+def configure_web(application: FastAPI) -> Path | None:
+    dist = resolve_web_dist()
+    if dist is not None:
+        mount_web(application, dist)
+    return dist
+
+
+configure_web(app)

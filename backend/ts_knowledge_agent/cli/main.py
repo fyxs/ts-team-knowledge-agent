@@ -57,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("schedule")
 
+    serve = sub.add_parser("serve")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8088)
+    serve.add_argument("--skip-preflight", action="store_true")
+
     search = sub.add_parser("search")
     search.add_argument("query")
     search.add_argument("--limit", type=int, default=5)
@@ -185,6 +190,27 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "schedule":
         return run_scheduler(settings)
+
+    if args.command == "serve":
+        from ts_knowledge_agent.api.main import resolve_web_dist
+        from ts_knowledge_agent.services.preflight import format_report, has_blocking_errors, run_preflight
+
+        results = run_preflight(settings, web_dist=resolve_web_dist())
+        print(format_report(results))
+        if has_blocking_errors(results) and not args.skip_preflight:
+            print("")
+            print("启动已中止：存在阻塞项。修正后重试，或加 --skip-preflight 强制启动。")
+            return 2
+        if args.host not in {"127.0.0.1", "localhost"}:
+            print("")
+            print(f"注意：正在监听 {args.host}，界面可被网络内其它机器访问。")
+            print("      界面上的推送操作会使用本机的 Git 凭据，请确认网络范围可信。")
+        print("")
+        print(f"服务地址：http://{args.host}:{args.port}/")
+        import uvicorn
+
+        uvicorn.run("ts_knowledge_agent.api.main:app", host=args.host, port=args.port)
+        return 0
 
     if args.command == "ask":
         provider = create_provider(settings)
