@@ -8,6 +8,7 @@ import subprocess
 
 DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL = "git@github.com:fyxs/ts-team-knowledge-base.git"
 DEFAULT_SCAN_INTERVAL_MINUTES = 60
+MIN_SCAN_INTERVAL_MINUTES = 5
 
 
 def parse_interval_minutes(value: str | None) -> int:
@@ -17,8 +18,8 @@ def parse_interval_minutes(value: str | None) -> int:
         minutes = int(value)
     except ValueError as exc:
         raise ValueError("scan interval must be an integer number of minutes") from exc
-    if minutes < 1:
-        raise ValueError("scan interval must be at least 1 minute")
+    if minutes < MIN_SCAN_INTERVAL_MINUTES:
+        raise ValueError(f"scan interval must be at least {MIN_SCAN_INTERVAL_MINUTES} minutes")
     return minutes
 
 

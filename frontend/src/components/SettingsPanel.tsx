@@ -119,7 +119,7 @@ export function SettingsPanel() {
         base_url: draft.base_url,
         max_tokens: Number(draft.max_tokens) || 4096,
         max_steps: Number(draft.max_steps) || 8,
-        scan_interval_minutes: Number(draft.scan_interval_minutes) || 60,
+        scan_interval_minutes: Math.max(5, Number(draft.scan_interval_minutes) || 60),
       });
       setConfig(saved);
       setDraft(saved);
@@ -173,12 +173,12 @@ export function SettingsPanel() {
           扫描间隔（分钟）
           <input
             type="number"
-            min={1}
+            min={5}
             max={1440}
             value={draft.scan_interval_minutes}
-            onChange={(event) => setDraft({ ...draft, scan_interval_minutes: Number(event.target.value) || 1 })}
+            onChange={(event) => setDraft({ ...draft, scan_interval_minutes: Number(event.target.value) || 5 })}
           />
-          <span className="field-hint">计划任务按此间隔判断本轮是否执行，默认 60 分钟</span>
+          <span className="field-hint">不低于 5 分钟；计划任务按此间隔判断本轮是否执行，默认 60 分钟</span>
         </label>
         <div className="settings-actions">
           <button type="button" onClick={startScan} disabled={busyAction === "scan"}>

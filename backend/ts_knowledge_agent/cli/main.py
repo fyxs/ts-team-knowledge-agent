@@ -12,7 +12,12 @@ from pathlib import Path
 from ts_knowledge_agent.agent.runtime import create_provider, run_agent
 from ts_knowledge_agent.agent.setup import configure_model_interactively
 from ts_knowledge_agent.agent.secrets import mask_secret, read_api_key, secret_path, write_api_key
-from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, Settings, initialize_working_directory
+from ts_knowledge_agent.config import (
+    DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL,
+    MIN_SCAN_INTERVAL_MINUTES,
+    Settings,
+    initialize_working_directory,
+)
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
@@ -99,8 +104,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "init":
-        if args.scan_interval_minutes < 1:
-            parser.error("scan-interval-minutes must be at least 1 minute")
+        if args.scan_interval_minutes < MIN_SCAN_INTERVAL_MINUTES:
+            parser.error(f"scan-interval-minutes must be at least {MIN_SCAN_INTERVAL_MINUTES} minutes")
         if not args.personal_workspace.strip():
             parser.error("personal-workspace must not be empty")
         if not str(args.shared_source_directory).strip():

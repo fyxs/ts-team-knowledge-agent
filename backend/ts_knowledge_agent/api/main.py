@@ -14,7 +14,7 @@ from ts_knowledge_agent.agent.runtime import create_provider, run_agent
 from ts_knowledge_agent.agent.secrets import read_api_key, secret_path
 from ts_knowledge_agent.agent.setup import mask_key
 from ts_knowledge_agent.adapters.git_sync import pull_repository, push_repository
-from ts_knowledge_agent.config import Settings
+from ts_knowledge_agent.config import MIN_SCAN_INTERVAL_MINUTES, Settings
 from ts_knowledge_agent.services.scheduler import run_once_with_report
 
 app = FastAPI(title="TS Knowledge Agent", version="0.1.0")
@@ -113,8 +113,11 @@ def put_config(payload: ConfigPayload) -> dict:
     if payload.max_steps is not None:
         updates["model_max_steps"] = int(payload.max_steps)
     if payload.scan_interval_minutes is not None:
-        if int(payload.scan_interval_minutes) < 1:
-            raise HTTPException(status_code=400, detail="scan_interval_minutes must be at least 1")
+        if int(payload.scan_interval_minutes) < MIN_SCAN_INTERVAL_MINUTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"scan_interval_minutes must be at least {MIN_SCAN_INTERVAL_MINUTES}",
+            )
         updates["scan_interval_minutes"] = int(payload.scan_interval_minutes)
     if not updates:
         raise HTTPException(status_code=400, detail="no configuration fields provided")
