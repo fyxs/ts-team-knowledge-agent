@@ -38,6 +38,7 @@ class Settings:
     model_base_url: str = ""
     model_max_tokens: int = 4096
     model_max_steps: int = 8
+    excluded_source_paths: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -69,6 +70,9 @@ class Settings:
             model_base_url=str(data.get("model_base_url", "")).strip(),
             model_max_tokens=int(data.get("model_max_tokens", 4096) or 4096),
             model_max_steps=int(data.get("model_max_steps", 8) or 8),
+            excluded_source_paths=tuple(
+                str(item).strip() for item in (data.get("excluded_source_paths") or []) if str(item).strip()
+            ),
         )
 
     def write_file(self, path: Path) -> None:
@@ -87,6 +91,7 @@ class Settings:
             "model_base_url": self.model_base_url,
             "model_max_tokens": self.model_max_tokens,
             "model_max_steps": self.model_max_steps,
+            "excluded_source_paths": list(self.excluded_source_paths),
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

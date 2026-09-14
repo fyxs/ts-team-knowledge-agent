@@ -57,7 +57,12 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         for source in sources: state.upsert_source(source)
         state.backfill_source_statuses()
         pending=[]
+        excluded=set(settings.excluded_source_paths)
         for source in sources:
+            if source.relative_path in excluded:
+                reason_counts["excluded"]=reason_counts.get("excluded",0)+1
+                state.update_source_status(source.relative_path,"ignored")
+                continue
             reason="unsupported" if not source.supported else state.conversion_reason(source)
             reason_counts[reason]=reason_counts.get(reason,0)+1
             if not source.supported:
@@ -109,7 +114,7 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc),reason=reason)
                     state.update_source_status(source.relative_path,"failed_retryable")
                     failed+=1
-        skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)
+        skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)+reason_counts.get("excluded",0)
         missing=state.mark_missing_sources(seen)
         indexed=index_converted(settings)
         write_source_registry(settings)
