@@ -12,6 +12,12 @@
 → Web / CLI 基于知识库问答，回答附带来源
 ```
 
+## 架构总览
+
+![TS Team Knowledge Agent V1 架构总览：本地源目录 → 扫描器 → 转换适配器 → 质量门禁 → 密钥门禁 → 共享知识仓，右侧为全文索引、Agent 运行时与本地 Web](docs/images/architecture-v1.png)
+
+采集与转换在本地完成，产物写入共享知识仓后再建立索引；问答由 Agent 运行时结合检索结果与模型服务给出，回答附带来源。分层与边界说明见 [docs/architecture-v1.md](docs/architecture-v1.md)。
+
 ## 技术栈
 
 | 层 | 选型 |
