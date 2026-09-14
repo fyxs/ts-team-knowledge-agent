@@ -6,6 +6,7 @@ from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.adapters.git_sync import sync_repository
 from ts_knowledge_agent.services.secret_scan import quarantine_document, scan_markdown_file
+from ts_knowledge_agent.services.feedback import FeedbackRecord, append_feedback, has_open_feedback
 from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_file
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
@@ -81,6 +82,22 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     if not secret.ok:
                         quarantine_document(settings.working_directory, settings.shared_knowledge_repository_directory, result.output_path.parent)
                         state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"blocked_secret",secret.summary(),reason="blocked_secret")
+                        if not has_open_feedback(settings.working_directory, source.sha256, "credential_exposure"):
+                            append_feedback(settings.working_directory, FeedbackRecord(
+                                source_relative_path=source.relative_path,
+                                source_sha256=source.sha256,
+                                file_type=source.absolute_path.suffix.lower(),
+                                converter="secret-scan",
+                                converter_version=CONVERTER_VERSION,
+                                output_path=str(output),
+                                category="credential_exposure",
+                                description=secret.summary(),
+                                expected="移除或脱敏凭据后重新转换，再进入共享仓",
+                                source_issue=True,
+                                adapter_issue=False,
+                                resolution="open",
+                                review_status="open",
+                            ))
                         state.update_source_status(source.relative_path,"blocked_secret")
                         reason_counts["blocked_secret"]=reason_counts.get("blocked_secret",0)+1
                         failed += 1
