@@ -156,7 +156,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ask":
         provider = create_provider_from_env()
         if provider is None:
-            print("model provider not configured: set TS_TEAM_KB_MODEL_BASE_URL, TS_TEAM_KB_MODEL_API_KEY, TS_TEAM_KB_MODEL_NAME")
+            print(
+                "model provider not configured; set TS_TEAM_KB_MODEL_PROVIDER (openai|anthropic), "
+                "TS_TEAM_KB_MODEL_BASE_URL, TS_TEAM_KB_MODEL_API_KEY, TS_TEAM_KB_MODEL_NAME"
+            )
             return 2
         result = run_agent(settings, args.question, provider, max_steps=args.max_steps)
         print(json.dumps({"answer": result.answer, "citations": result.citations, "steps": result.steps, "error": result.error, "prompt_version": result.prompt_version}, ensure_ascii=False, indent=2))

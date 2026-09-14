@@ -4,27 +4,26 @@ import json
 import os
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Protocol
 
+from ts_knowledge_agent.agent.anthropic import AnthropicProvider
 from ts_knowledge_agent.agent.prompt import SYSTEM_PROMPT_VERSION, build_system_prompt
+from ts_knowledge_agent.agent.provider_types import Provider, ProviderReply
 from ts_knowledge_agent.agent.skills import Skill, load_skills
 from ts_knowledge_agent.agent.tools import dispatch_tool
 from ts_knowledge_agent.config import Settings
 
 DEFAULT_MAX_STEPS = 6
 
-
-@dataclass(frozen=True)
-class ProviderReply:
-    content: str = ""
-    tool_calls: list[dict] = field(default_factory=list)
-    error: str | None = None
-
-
-class Provider(Protocol):
-    model: str
-
-    def chat(self, messages: list[dict], tools: list[dict]) -> ProviderReply: ...
+__all__ = [
+    "AgentResult",
+    "AnthropicProvider",
+    "DEFAULT_MAX_STEPS",
+    "OpenAICompatibleProvider",
+    "Provider",
+    "ProviderReply",
+    "create_provider_from_env",
+    "run_agent",
+]
 
 
 @dataclass
@@ -79,10 +78,19 @@ class OpenAICompatibleProvider:
         return ProviderReply(content=message.get("content") or "", tool_calls=calls)
 
 
-def create_provider_from_env() -> OpenAICompatibleProvider | None:
-    base_url = os.getenv("TS_TEAM_KB_MODEL_BASE_URL", "")
-    api_key = os.getenv("TS_TEAM_KB_MODEL_API_KEY", "")
-    model = os.getenv("TS_TEAM_KB_MODEL_NAME", "")
+def create_provider_from_env() -> Provider | None:
+    """按环境变量创建 provider；未配置完整时返回 None，由调用方给出明确提示。"""
+
+    provider_name = os.getenv("TS_TEAM_KB_MODEL_PROVIDER", "").strip().lower()
+    model = os.getenv("TS_TEAM_KB_MODEL_NAME", "").strip()
+    api_key = os.getenv("TS_TEAM_KB_MODEL_API_KEY", "").strip()
+    base_url = os.getenv("TS_TEAM_KB_MODEL_BASE_URL", "").strip()
+    max_tokens = int(os.getenv("TS_TEAM_KB_MODEL_MAX_TOKENS", "4096") or 4096)
+
+    if provider_name in {"anthropic", "claude"} or (not provider_name and "anthropic" in base_url):
+        if not (api_key and model):
+            return None
+        return AnthropicProvider(api_key=api_key, model=model, base_url=base_url, max_tokens=max_tokens)
     if not (base_url and api_key and model):
         return None
     return OpenAICompatibleProvider(base_url, api_key, model)
