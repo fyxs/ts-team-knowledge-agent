@@ -274,7 +274,12 @@ describe("agent chat shell", () => {
 
     expect(calls.some((url) => url.includes("/api/v1/repository/pull"))).toBe(true);
     expect(calls.some((url) => url.includes("/api/v1/repository/push"))).toBe(true);
-    expect(container?.textContent).toContain("推送结果：pushed");
+
+    // 同步结果就近显示在「共享知识仓」分区内，而不是弹窗底部
+    const sections = Array.from(container?.querySelectorAll(".modal-body .settings-section") ?? []);
+    const repoSections = sections.filter((section) => section.textContent?.includes("共享知识仓"));
+    expect(repoSections.length).toBe(1);
+    expect(repoSections[0].textContent).toContain("推送结果：pushed");
   });
 
   it("closes the settings modal on Escape", async () => {

@@ -31,7 +31,9 @@ function describeRun(status: RunStatus): string {
 export function SettingsPanel() {
   const [config, setConfig] = useState<ModelConfig | null>(null);
   const [draft, setDraft] = useState<ModelConfig | null>(null);
-  const [status, setStatus] = useState("");
+  const [configStatus, setConfigStatus] = useState("");
+  const [scanStatus, setScanStatus] = useState("");
+  const [syncStatus, setSyncStatus] = useState("");
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null);
   const [busyAction, setBusyAction] = useState("");
   const pollRef = useRef<number | null>(null);
@@ -40,7 +42,7 @@ export function SettingsPanel() {
     try {
       setRunStatus(await fetchRunStatus());
     } catch (error) {
-      setStatus(`读取运行状态失败：${error instanceof Error ? error.message : String(error)}`);
+      setScanStatus(`读取运行状态失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }, []);
 
@@ -50,7 +52,7 @@ export function SettingsPanel() {
         setConfig(loaded);
         setDraft(loaded);
       })
-      .catch((error: Error) => setStatus(`读取配置失败：${error.message}`));
+      .catch((error: Error) => setConfigStatus(`读取配置失败：${error.message}`));
     void refreshRunStatus();
     return () => {
       if (pollRef.current !== null) window.clearInterval(pollRef.current);
@@ -59,11 +61,11 @@ export function SettingsPanel() {
 
   const startScan = async () => {
     setBusyAction("scan");
-    setStatus("已触发扫描，正在后台执行…");
+    setScanStatus("已触发扫描，正在后台执行…");
     try {
       const result = await triggerRun({ sync: true });
       if (result.status === "busy") {
-        setStatus("已有扫描在运行，未重复触发");
+        setScanStatus("已有扫描在运行，未重复触发");
       }
       await refreshRunStatus();
       if (pollRef.current !== null) window.clearInterval(pollRef.current);
@@ -76,7 +78,7 @@ export function SettingsPanel() {
         }
       }, 5000);
     } catch (error) {
-      setStatus(`触发扫描失败：${error instanceof Error ? error.message : String(error)}`);
+      setScanStatus(`触发扫描失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusyAction("");
     }
@@ -84,21 +86,21 @@ export function SettingsPanel() {
 
   const syncAction = async (kind: "pull" | "push") => {
     setBusyAction(kind);
-    setStatus(kind === "pull" ? "正在拉取共享知识仓…" : "正在推送共享知识仓…");
+    setSyncStatus(kind === "pull" ? "正在拉取共享知识仓…" : "正在推送共享知识仓…");
     try {
       const result = kind === "pull" ? await pullKnowledgeRepository() : await pushKnowledgeRepository();
       const detail = result.message ? `（${result.message}）` : "";
-      setStatus(`${kind === "pull" ? "拉取" : "推送"}结果：${result.status}${detail}`);
-      if (result.commit) setStatus((current) => `${current} commit=${result.commit?.slice(0, 8)}`);
+      const commit = result.commit ? ` commit=${result.commit.slice(0, 8)}` : "";
+      setSyncStatus(`${kind === "pull" ? "拉取" : "推送"}结果：${result.status}${detail}${commit}`);
     } catch (error) {
-      setStatus(`${kind === "pull" ? "拉取" : "推送"}失败：${error instanceof Error ? error.message : String(error)}`);
+      setSyncStatus(`${kind === "pull" ? "拉取" : "推送"}失败：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setBusyAction("");
     }
   };
 
   if (!draft) {
-    return <p className="settings-note">{status || "加载中…"}</p>;
+    return <p className="settings-note">{configStatus || "加载中…"}</p>;
   }
 
   const dirty =
@@ -111,7 +113,7 @@ export function SettingsPanel() {
       draft.scan_interval_minutes !== config.scan_interval_minutes);
 
   const save = async () => {
-    setStatus("保存中…");
+    setConfigStatus("保存中…");
     try {
       const saved = await saveModelConfig({
         provider: draft.provider,
@@ -123,9 +125,9 @@ export function SettingsPanel() {
       });
       setConfig(saved);
       setDraft(saved);
-      setStatus("已保存");
+      setConfigStatus("已保存");
     } catch (error) {
-      setStatus(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      setConfigStatus(`保存失败：${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -186,7 +188,10 @@ export function SettingsPanel() {
           </button>
           <button type="button" onClick={() => void refreshRunStatus()}>刷新状态</button>
         </div>
-        <div className="settings-status">{runStatus ? describeRun(runStatus) : "正在读取运行状态…"}</div>
+        <div className="settings-status">
+          {scanStatus && <div>{scanStatus}</div>}
+          <div>{runStatus ? describeRun(runStatus) : "正在读取运行状态…"}</div>
+        </div>
       </section>
 
       <section className="settings-section">
@@ -199,6 +204,7 @@ export function SettingsPanel() {
             推送
           </button>
         </div>
+        <div className="settings-status">{syncStatus || "尚未执行同步操作"}</div>
         <span className="field-hint">拉取只在工作区干净时执行；推送会先提交本轮产生的知识再推送。</span>
       </section>
 
@@ -207,7 +213,7 @@ export function SettingsPanel() {
       <div className="settings-note">
         <div>API Key：{draft.api_key}</div>
         <div>密钥不在此处修改，请用 <code>ts-team-kb config set-key</code>。</div>
-        {status && <div className="settings-status">{status}</div>}
+        {configStatus && <div className="settings-status">{configStatus}</div>}
       </div>
     </div>
   );
