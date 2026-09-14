@@ -51,3 +51,10 @@ C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\de
 - `tokens.css` 是该设计体系的唯一来源，**不重命名 OD 标准 token**；
 - 应用样式只允许引用 token，不硬编码颜色、圆角、间距；
 - 需要新视觉值时应先在 `tokens.css` 增加 token，再在 `styles.css` 使用。
+
+应用扩展 token（源设计体系未定义，已在 `tokens.css` 中单独标注）：
+
+| token | 用途 |
+| --- | --- |
+| `--overlay` | 弹窗遮罩，随主题变化 |
+| `--content-max` | 主区域内容宽度阶梯：默认 896px（设计体系 `container-max`），≥1600px 为 1080px，≥1920px 为 1200px |

@@ -19,7 +19,7 @@ body{
 }
 
 .app-shell{
-  max-width:var(--container-max);
+  max-width:var(--content-max);
   margin:0 auto;
   padding:var(--space-6) var(--container-gutter-desktop);
   min-height:100%;

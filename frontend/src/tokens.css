@@ -84,8 +84,14 @@
   --container-gutter-tablet:   16px;
   --container-gutter-phone:    8px;
 
-  /* 应用扩展 token（源设计体系未定义，仅用于遮罩等场景） */
+  /* 应用扩展 token（源设计体系未定义）
+   * --overlay   弹窗遮罩
+   * --content-max 主区域内容宽度阶梯：默认沿用设计体系的 container-max，
+   *               宽屏下按断点递增，避免两侧过度留白。 */
   --overlay:                   oklch(0 0 0 / 0.28);
+  --content-max:               var(--container-max);
+  --content-max-wide:          1080px;
+  --content-max-ultrawide:     1200px;
 
   color-scheme: light;
 }
@@ -126,4 +132,13 @@
   --overlay:                   oklch(0 0 0 / 0.6);
 
   color-scheme: dark;
+}
+
+/* 主区域内容宽度阶梯：只在宽屏放大，不改变窄屏的阅读宽度 */
+@media (min-width: 1600px) {
+  :root { --content-max: var(--content-max-wide); }
+}
+
+@media (min-width: 1920px) {
+  :root { --content-max: var(--content-max-ultrawide); }
 }
