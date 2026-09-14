@@ -29,7 +29,12 @@ def run_once_with_report(settings: Settings, *, sync: bool = False, batch_size: 
     return summary
 
 
-def run_scheduler(settings: Settings, run: Callable[[Settings],RunSummary]=run_once, sleep: Callable[[float],None]=time.sleep, max_runs: int|None=None)->int:
+def _default_run(settings: Settings) -> RunSummary:
+    return run_once(settings, sync=settings.sync_on_schedule)
+
+
+def run_scheduler(settings: Settings, run: Callable[[Settings],RunSummary]|None=None, sleep: Callable[[float],None]=time.sleep, max_runs: int|None=None)->int:
+    run = run or _default_run
     completed=0; exit_code=0
     while max_runs is None or completed<max_runs:
         started_dt=datetime.now(timezone.utc); started=started_dt.isoformat(); t=time.perf_counter()

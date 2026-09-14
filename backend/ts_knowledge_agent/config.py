@@ -31,6 +31,7 @@ class Settings:
     scan_interval_minutes: int = DEFAULT_SCAN_INTERVAL_MINUTES
     shared_knowledge_repository_url: str = DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL
     mineru_python: Path | None = None
+    sync_on_schedule: bool = True
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -56,6 +57,7 @@ class Settings:
             scan_interval_minutes=parse_interval_minutes(str(data.get("scan_interval_minutes", 60))),
             shared_knowledge_repository_url=str(data.get("shared_knowledge_repository_url", DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)).strip() or DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL,
             mineru_python=Path(data["mineru_python"]).expanduser() if str(data.get("mineru_python", "")).strip() else None,
+            sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
         )
 
     def write_file(self, path: Path) -> None:
@@ -68,6 +70,7 @@ class Settings:
             "scan_interval_minutes": self.scan_interval_minutes,
             "shared_knowledge_repository_url": self.shared_knowledge_repository_url,
             "mineru_python": str(self.mineru_python) if self.mineru_python else "",
+            "sync_on_schedule": self.sync_on_schedule,
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
