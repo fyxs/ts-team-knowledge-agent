@@ -50,7 +50,8 @@ body{
 }
 .settings-button:hover,.theme-toggle:hover,.composer button:hover:not(:disabled),.save-button:hover:not(:disabled){background:var(--accent-hover);border-color:var(--border-soft)}
 .settings-button:active,.theme-toggle:active,.composer button:active:not(:disabled),.save-button:active:not(:disabled){background:var(--accent-active)}
-.settings-button:focus-visible,.theme-toggle:focus-visible,.composer button:focus-visible,.save-button:focus-visible,.composer textarea:focus-visible,.settings-panel input:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.settings-button:focus-visible,.theme-toggle:focus-visible,.composer button:focus-visible,.save-button:focus-visible,.settings-panel input:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.composer textarea:focus-visible{outline:none}
 
 /* ---------- 对话面板 ---------- */
 .chat-layout{width:100%;flex:1;min-height:0;display:flex;flex-direction:column}
@@ -124,7 +125,8 @@ body{
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- 输入区 ---------- */
-.composer{margin:0 var(--space-6) var(--space-6);border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4)}
+.composer{margin:0 var(--space-6) var(--space-6);border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);transition:border-color var(--motion-fast) var(--ease-standard),box-shadow var(--motion-fast) var(--ease-standard)}
+.composer:focus-within{border-color:var(--border-soft);box-shadow:var(--focus-ring)}
 .composer textarea{width:100%;resize:vertical;min-height:52px;background:transparent;border:0;outline:0;color:var(--fg);font:inherit;font-size:var(--text-sm);line-height:var(--leading-body)}
 .composer textarea::placeholder{color:var(--meta)}
 .composer-footer{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);color:var(--meta);font-size:var(--text-xs);padding-top:var(--space-2)}
