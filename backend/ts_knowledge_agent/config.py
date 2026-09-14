@@ -36,6 +36,7 @@ class Settings:
     model_name: str = ""
     model_base_url: str = ""
     model_max_tokens: int = 4096
+    model_max_steps: int = 8
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -66,6 +67,7 @@ class Settings:
             model_name=str(data.get("model_name", "")).strip(),
             model_base_url=str(data.get("model_base_url", "")).strip(),
             model_max_tokens=int(data.get("model_max_tokens", 4096) or 4096),
+            model_max_steps=int(data.get("model_max_steps", 8) or 8),
         )
 
     def write_file(self, path: Path) -> None:
@@ -83,6 +85,7 @@ class Settings:
             "model_name": self.model_name,
             "model_base_url": self.model_base_url,
             "model_max_tokens": self.model_max_tokens,
+            "model_max_steps": self.model_max_steps,
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

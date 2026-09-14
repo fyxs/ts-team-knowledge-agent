@@ -83,6 +83,22 @@ class OpenAICompatibleProvider:
         return ProviderReply(content=message.get("content") or "", tool_calls=calls)
 
 
+def normalize_openai_base_url(base_url: str) -> str:
+    """OpenAI 兼容网关的 base_url 需要包含版本前缀（通常是 /v1）。
+
+    用户常只填主机与端口（http://host:3000），此时补全 /v1；
+    已带路径则原样保留，避免破坏 /v1、/openai/v1 等自定义前缀。
+    """
+
+    value = (base_url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    without_scheme = value.split("://", 1)[-1]
+    if "/" not in without_scheme:
+        return value + "/v1"
+    return value
+
+
 def create_provider(settings: Settings) -> Provider | None:
     """按“环境变量优先、配置文件其次”的顺序解析模型配置；密钥来自环境变量或本地密钥文件。"""
 
@@ -98,7 +114,7 @@ def create_provider(settings: Settings) -> Provider | None:
         return AnthropicProvider(api_key=api_key, model=model, base_url=base_url, max_tokens=max_tokens)
     if not (base_url and api_key and model):
         return None
-    return OpenAICompatibleProvider(base_url, api_key, model)
+    return OpenAICompatibleProvider(normalize_openai_base_url(base_url), api_key, model)
 
 
 def create_provider_from_env() -> Provider | None:
@@ -116,7 +132,7 @@ def create_provider_from_env() -> Provider | None:
         return AnthropicProvider(api_key=api_key, model=model, base_url=base_url, max_tokens=max_tokens)
     if not (base_url and api_key and model):
         return None
-    return OpenAICompatibleProvider(base_url, api_key, model)
+    return OpenAICompatibleProvider(normalize_openai_base_url(base_url), api_key, model)
 
 
 def run_agent(settings: Settings, question: str, provider: Provider, skills: list[Skill] | None = None, max_steps: int = DEFAULT_MAX_STEPS) -> AgentResult:

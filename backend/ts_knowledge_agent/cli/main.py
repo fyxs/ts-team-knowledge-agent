@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--prefix")
     listing.add_argument("--limit", type=int, default=200)
 
-    ask = sub.add_parser("ask"); ask.add_argument("question"); ask.add_argument("--max-steps", type=int, default=6)
+    ask = sub.add_parser("ask"); ask.add_argument("question"); ask.add_argument("--max-steps", type=int, default=None)
     config = sub.add_parser("config")
     config_sub = config.add_subparsers(dest="config_action")
     config_sub.add_parser("show")
@@ -75,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_set.add_argument("--model")
     config_set.add_argument("--base-url")
     config_set.add_argument("--max-tokens", type=int)
+    config_set.add_argument("--max-steps", type=int)
     config_key = config_sub.add_parser("set-key")
     config_key.add_argument("--from-file", dest="key_file", help="从文件读取密钥（适合不方便交互输入时）")
     config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
@@ -184,7 +185,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "TS_TEAM_KB_MODEL_BASE_URL, TS_TEAM_KB_MODEL_API_KEY, TS_TEAM_KB_MODEL_NAME"
             )
             return 2
-        result = run_agent(settings, args.question, provider, max_steps=args.max_steps)
+        max_steps = args.max_steps or settings.model_max_steps
+        result = run_agent(settings, args.question, provider, max_steps=max_steps)
         print(json.dumps({"answer": result.answer, "citations": result.citations, "steps": result.steps, "error": result.error, "prompt_version": result.prompt_version}, ensure_ascii=False, indent=2))
         return 1 if result.error else 0
     if args.command == "config":
@@ -212,6 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.model: updates["model_name"] = args.model.strip()
             if args.base_url is not None: updates["model_base_url"] = args.base_url.strip()
             if args.max_tokens: updates["model_max_tokens"] = int(args.max_tokens)
+            if args.max_steps: updates["model_max_steps"] = int(args.max_steps)
             if not updates:
                 parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens")
             if not config_path.is_file():
