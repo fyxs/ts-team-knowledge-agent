@@ -21,7 +21,7 @@ body{
 .app-shell{
   max-width:var(--container-max);
   margin:0 auto;
-  padding:var(--space-6) var(--container-gutter-desktop) var(--space-8);
+  padding:var(--space-6) var(--container-gutter-desktop);
   min-height:100%;
   display:flex;
   flex-direction:column;
@@ -53,10 +53,10 @@ body{
 .settings-button:focus-visible,.theme-toggle:focus-visible,.composer button:focus-visible,.save-button:focus-visible,.composer textarea:focus-visible,.settings-panel input:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* ---------- 对话面板 ---------- */
-.chat-layout{width:100%;display:block;flex:1;min-height:0}
+.chat-layout{width:100%;flex:1;min-height:0;display:flex;flex-direction:column}
 .chat-panel{
   display:flex;flex-direction:column;width:100%;
-  min-height:calc(100vh - 200px);
+  flex:1;min-height:0;
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:var(--radius-lg);
@@ -68,7 +68,7 @@ body{
 .chat-heading h1{margin:var(--space-2) 0 0;font-size:var(--text-lg);font-weight:600;letter-spacing:var(--tracking-display);line-height:var(--leading-tight)}
 .model-chip{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);border:1px solid var(--border);border-radius:var(--radius-pill);padding:var(--space-1) var(--space-3);white-space:nowrap}
 
-.messages{flex:1;overflow-y:auto;padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
+.messages{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
 
 .message{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);background:var(--surface)}
 .message-label{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);margin-bottom:var(--space-2);letter-spacing:.04em}
@@ -156,8 +156,7 @@ body{
 
 /* ---------- 窄屏 ---------- */
 @media (max-width:720px){
-  .app-shell{padding:var(--space-4) var(--container-gutter-phone) var(--space-6)}
-  .chat-panel{min-height:calc(100vh - 160px)}
+  .app-shell{padding:var(--space-4) var(--container-gutter-phone)}
   .chat-heading{padding:var(--space-4)}
   .messages{padding:var(--space-4)}
   .composer{margin:0 var(--space-4) var(--space-4)}
