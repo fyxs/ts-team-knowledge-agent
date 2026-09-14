@@ -53,6 +53,7 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         sources=scan_directory(settings.shared_source_directory)
         seen={source.relative_path for source in sources}
         for source in sources: state.upsert_source(source)
+        state.backfill_source_statuses()
         pending=[]
         for source in sources:
             reason="unsupported" if not source.supported else state.conversion_reason(source)
