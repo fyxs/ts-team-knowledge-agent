@@ -1,62 +1,160 @@
-import React from "react";
+import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-type Metric = { label: string; value: string; detail: string };
+type Role = "user" | "assistant" | "tool";
+type Message = { id: number; role: Role; content: string; source?: string };
 
-const metrics: Metric[] = [
-  { label: "知识源", value: "未配置", detail: "等待 CLI 初始化" },
-  { label: "处理队列", value: "0", detail: "暂无待处理任务" },
-  { label: "Git 同步", value: "未运行", detail: "每小时批次同步" },
+type Settings = {
+  model: string;
+  topK: number;
+  requireCitations: boolean;
+};
+
+const initialMessages: Message[] = [
+  {
+    id: 1,
+    role: "assistant",
+    content:
+      "你好，我是 TS 团队知识 Agent。你可以让我搜索、分析、总结或对比团队知识。回答会优先基于知识库，并标注来源。",
+  },
 ];
 
+const defaultSettings: Settings = {
+  model: "待接入模型",
+  topK: 8,
+  requireCitations: true,
+};
+
+function MessageBubble({ message }: { message: Message }) {
+  const className = `message message-${message.role}`;
+  return (
+    <article className={className}>
+      <div className="message-label">
+        {message.role === "user" ? "你" : message.role === "tool" ? "知识库工具" : "TS Agent"}
+      </div>
+      <div className="message-body">
+        {message.content.split("\n").map((line, index) => (
+          <p key={`${message.id}-${index}`}>{line || "\u00a0"}</p>
+        ))}
+      </div>
+      {message.source && <div className="citation">来源：{message.source}</div>}
+    </article>
+  );
+}
+
 function App() {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [input, setInput] = useState("");
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const canSend = useMemo(() => input.trim().length > 0 && !busy, [input, busy]);
+
+  function sendMessage() {
+    const content = input.trim();
+    if (!content || busy) return;
+    const userMessage: Message = { id: Date.now(), role: "user", content };
+    setMessages((current) => [...current, userMessage]);
+    setInput("");
+    setBusy(true);
+
+    window.setTimeout(() => {
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now() + 1,
+          role: "tool",
+          content: `已准备检索知识库（Top-K: ${settings.topK}）。模型接口接入后，这里将显示真实检索过程。`,
+        },
+        {
+          id: Date.now() + 2,
+          role: "assistant",
+          content:
+            "当前是 Web Chat UI 冒烟模式。下一步接入 Agent API 后，我会先搜索相关知识，再基于检索结果回答。",
+          source: "知识库工具接入待完成",
+        },
+      ]);
+      setBusy(false);
+    }, 450);
+  }
+
   return (
     <main className="app-shell">
-      <header className="hero">
-        <div className="brand-mark">TS</div>
-        <div>
-          <p className="eyebrow">TS KNOWLEDGE AGENT / V0.1</p>
-          <h1>把日常材料，变成团队可用的知识。</h1>
-          <p className="lede">本地优先 · Agent 驱动 · Git 共享 · 源文件只读</p>
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-mark">TS</div>
+          <div>
+            <strong>TS Knowledge Agent</strong>
+            <span>轻量 Agent Web Chat</span>
+          </div>
         </div>
-        <span className="status-pill"><i /> 骨架运行中</span>
+        <div className="topbar-actions">
+          <span className="connection-status"><i /> Agent Runtime 待接入</span>
+          <button className="settings-button" type="button" onClick={() => setSettingsOpen((open) => !open)}>
+            设置
+          </button>
+        </div>
       </header>
 
-      <section className="metrics" aria-label="系统概览">
-        {metrics.map((metric) => (
-          <article className="metric-card" key={metric.label}>
-            <span className="metric-label">{metric.label}</span>
-            <strong>{metric.value}</strong>
-            <span className="metric-detail">{metric.detail}</span>
-          </article>
-        ))}
-      </section>
-
-      <section className="workspace-grid">
-        <article className="panel primary-panel">
-          <div className="panel-heading">
-            <div><span className="kicker">KNOWLEDGE WORKSPACE</span><h2>本地知识处理</h2></div>
-            <span className="panel-index">01</span>
+      <section className="chat-layout">
+        <div className="chat-panel">
+          <div className="chat-heading">
+            <div>
+              <span className="eyebrow">KNOWLEDGE CONVERSATION</span>
+              <h1>和团队知识对话</h1>
+            </div>
+            <span className="model-chip">{settings.model}</span>
           </div>
-          <p>成员按自己的习惯放置材料，Agent 负责扫描、转换、提炼和沉淀；不移动、不覆盖、不删除源文件。</p>
-          <div className="flow">
-            {["本地源目录", "MinerU", "知识沉淀", "Git 仓"].map((item, index) => <React.Fragment key={item}><span>{item}</span>{index < 3 && <b>→</b>}</React.Fragment>)}
+
+          <div className="messages" aria-live="polite">
+            {messages.map((message) => <MessageBubble key={message.id} message={message} />)}
+            {busy && <div className="thinking">Agent 正在准备检索…</div>}
           </div>
-          <button className="primary-action" type="button" disabled>初始化本地空间 <span>即将支持</span></button>
-        </article>
 
-        <article className="panel search-panel">
-          <div className="panel-heading"><div><span className="kicker">SEARCH</span><h2>搜索团队知识</h2></div><span className="panel-index">02</span></div>
-          <p>搜索接口将在第一期接入 SQLite FTS5，结果将携带来源和知识状态。</p>
-          <label className="search-box"><span>⌕</span><input disabled placeholder="搜索文件、知识或项目" /><kbd>⌘ K</kbd></label>
-          <div className="empty-state"><span className="empty-icon">⌁</span><span>知识索引尚未初始化</span></div>
-        </article>
+          <div className="composer">
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder="搜索、分析或总结团队知识…"
+              rows={2}
+            />
+            <div className="composer-footer">
+              <span>Enter 发送 · Shift+Enter 换行</span>
+              <button type="button" onClick={sendMessage} disabled={!canSend}>{busy ? "处理中…" : "发送"}</button>
+            </div>
+          </div>
+        </div>
+
+        {settingsOpen && (
+          <aside className="settings-panel">
+            <div className="panel-title"><span className="eyebrow">RUNTIME SETTINGS</span><h2>运行配置</h2></div>
+            <label>模型<select value={settings.model} onChange={(event) => setSettings({ ...settings, model: event.target.value })}><option>待接入模型</option><option>Harness 工作模型</option></select></label>
+            <label>检索 Top-K<input type="number" min={1} max={50} value={settings.topK} onChange={(event) => setSettings({ ...settings, topK: Number(event.target.value) || 1 })} /></label>
+            <label className="check-row"><input type="checkbox" checked={settings.requireCitations} onChange={(event) => setSettings({ ...settings, requireCitations: event.target.checked })} /> 要求回答附来源</label>
+            <div className="settings-note">一期配置页面只调整 Agent 运行参数，不提供管理员权限，也不管理知识库文件。</div>
+          </aside>
+        )}
       </section>
-
-      <footer><span>AG-UI：协议边界已确定，默认 SSE</span><span>Harness：沿用当前工作模型</span><span>ts-team-knowledge-base：固定远程仓</span></footer>
     </main>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
+export default App;
+
+const container = document.getElementById("root");
+
+if (container) {
+  createRoot(container).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
