@@ -10,6 +10,7 @@
 frontend/   React 前端应用（Vite，构建产物 frontend/dist）
 backend/    Python 后端与应用核心
 scripts/    开发、验证与运维辅助脚本
+design/     设计体系（token 定义源、设计说明与预览页）
 docs/       设计、协议、决策与运行说明
 tests/      自动化测试
 agent/      给编码 Agent 的规范（入口 AGENT.md / CLAUDE.md）

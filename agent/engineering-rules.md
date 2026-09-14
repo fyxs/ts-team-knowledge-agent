@@ -30,6 +30,7 @@ CLI、Web 和调度器不得各自实现扫描、转换、索引或 Git 同步�
 - 前端统一使用 React 18 + TypeScript + Vite；不引入 Vue、Next.js 或其它框架。
 - **不引入聊天 UI 组件库**。当前对话界面是自建组件（`frontend/src/components/`），
   不要重新引入 `@assistant-ui/*` 或 `@ag-ui/*`（历史上声明过但从未使用，已移除）。
+- 设计体系：`design/README.md` 是视觉唯一来源，改动界面前必读；标准 token 定义在 `design/tokens.css`
 - 样式只使用设计体系 token（`frontend/src/tokens.css`）；应用样式不得硬编码颜色、间距、圆角。
   需要新视觉值时，先在 tokens.css 增加 token，再在组件里引用。
 - Markdown 渲染统一走 `components/MarkdownView.tsx`，不要在别处另起渲染实现。

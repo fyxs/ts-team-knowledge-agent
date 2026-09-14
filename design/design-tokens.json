@@ -1,0 +1,685 @@
+{
+  "schemaVersion": 1,
+  "format": "od-design-tokens/v1",
+  "contract": "TOKEN_SCHEMA",
+  "generatedAt": "2026-09-14T05:47:23.257Z",
+  "verifiedAt": "2026-09-14T08:46:38.862Z",
+  "source": {
+    "tokensCss": "tokens.css",
+    "tokenContractReport": "source/token-contract.report.json",
+    "project": "D:\\2Work\\OpenProjects\\chatbot"
+  },
+  "summary": {
+    "totalTokens": 56,
+    "declaredTokens": 56,
+    "sourceBackedTokens": 49,
+    "sourceBackedA1": 23,
+    "requiredA1": 26,
+    "fallbackTokens": 7,
+    "aliasTokens": 0,
+    "score": 88,
+    "grade": "usable",
+    "recommendRebuild": false
+  },
+  "layers": {
+    "A1-identity": {
+      "total": 8,
+      "sourceBacked": 8,
+      "fallback": 0,
+      "alias": 0
+    },
+    "A1-structure": {
+      "total": 18,
+      "sourceBacked": 15,
+      "fallback": 3,
+      "alias": 0
+    },
+    "A2": {
+      "total": 26,
+      "sourceBacked": 22,
+      "fallback": 4,
+      "alias": 0
+    },
+    "B-slot": {
+      "total": 4,
+      "sourceBacked": 4,
+      "fallback": 0,
+      "alias": 0
+    }
+  },
+  "tokens": [
+    {
+      "name": "--bg",
+      "value": "oklch(0.985 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --background defines the page canvas.",
+      "sources": [
+        "app/globals.css:51"
+      ],
+      "sourceName": "--background"
+    },
+    {
+      "name": "--surface",
+      "value": "oklch(1 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --card; --popover and --card carry the same value, so this is the single lifted-surface tier.",
+      "sources": [
+        "app/globals.css:53",
+        "app/globals.css:55"
+      ],
+      "sourceName": "--card"
+    },
+    {
+      "name": "--surface-warm",
+      "value": "oklch(0.965 0 0)",
+      "type": "color",
+      "layer": "B-slot",
+      "confidence": "high",
+      "reason": "Source --secondary; the project's muted fill tier for chips, secondary buttons and quiet surfaces.",
+      "sources": [
+        "app/globals.css:59"
+      ],
+      "sourceName": "--secondary"
+    },
+    {
+      "name": "--fg",
+      "value": "oklch(0.12 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --foreground is the primary text color.",
+      "sources": [
+        "app/globals.css:52"
+      ],
+      "sourceName": "--foreground"
+    },
+    {
+      "name": "--fg-2",
+      "value": "oklch(0.38 0 0)",
+      "type": "color",
+      "layer": "B-slot",
+      "confidence": "high",
+      "reason": "Source --secondary-foreground. --sidebar-foreground repeats the identical oklch(0.38 0 0), confirming this is the project's second text tier.",
+      "sources": [
+        "app/globals.css:60",
+        "app/globals.css:75"
+      ],
+      "sourceName": "--secondary-foreground"
+    },
+    {
+      "name": "--muted",
+      "value": "oklch(0.94 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --muted; the quiet fill behind skeletons, hovered rows and active lines.",
+      "sources": [
+        "app/globals.css:61"
+      ],
+      "sourceName": "--muted"
+    },
+    {
+      "name": "--meta",
+      "value": "oklch(0.58 0 0)",
+      "type": "color",
+      "layer": "B-slot",
+      "confidence": "high",
+      "reason": "Corrected: bound to --muted-foreground, the color the component layer actually reads through text-muted-foreground. The importer had aliased this slot to --muted, which collapsed two distinct tiers into one value.",
+      "sources": [
+        "app/globals.css:62"
+      ],
+      "sourceName": "--muted-foreground"
+    },
+    {
+      "name": "--border",
+      "value": "oklch(0.9 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --border.",
+      "sources": [
+        "app/globals.css:66"
+      ],
+      "sourceName": "--border"
+    },
+    {
+      "name": "--border-soft",
+      "value": "oklch(0.88 0 0)",
+      "type": "color",
+      "layer": "B-slot",
+      "confidence": "high",
+      "reason": "Corrected: bound to --sidebar-border, the project's one-step-softer separator (0.88 against the default 0.90). The importer had aliased it to --border, so inner rows separated no more quietly than outer edges.",
+      "sources": [
+        "app/globals.css:80"
+      ],
+      "sourceName": "--sidebar-border"
+    },
+    {
+      "name": "--accent",
+      "value": "oklch(0.965 0 0)",
+      "type": "color",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Exact source token --accent. Note this is a neutral surface tint, not a hue: the product is deliberately monochrome, and its only chromatic accents are the chart ramp and the code-editor selection blue.",
+      "sources": [
+        "app/globals.css:63"
+      ],
+      "sourceName": "--accent"
+    },
+    {
+      "name": "--accent-on",
+      "value": "oklch(0.12 0 0)",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Source --accent-foreground is the exact foreground the project pairs with --accent.",
+      "sources": [
+        "app/globals.css:64"
+      ],
+      "sourceName": "--accent-foreground"
+    },
+    {
+      "name": "--accent-hover",
+      "value": "color-mix(in oklab, var(--accent), black 8%)",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "fallback",
+      "reason": "No hover tier for --accent exists in the source; schema fallback retained. Directionally correct for a light neutral accent.",
+      "sources": []
+    },
+    {
+      "name": "--accent-active",
+      "value": "color-mix(in oklab, var(--accent), black 14%)",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "fallback",
+      "reason": "No active tier for --accent exists in the source; schema fallback retained.",
+      "sources": []
+    },
+    {
+      "name": "--success",
+      "value": "#16a34a",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "fallback",
+      "reason": "The source project defines no success token. Schema fallback retained; do not present it as extracted evidence.",
+      "sources": []
+    },
+    {
+      "name": "--warn",
+      "value": "#eab308",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "fallback",
+      "reason": "The source project defines no warning token. Schema fallback retained.",
+      "sources": []
+    },
+    {
+      "name": "--danger",
+      "value": "oklch(0.55 0.15 25)",
+      "type": "color",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Source --destructive is the project's error/destructive color; it maps onto the danger role.",
+      "sources": [
+        "app/globals.css:65"
+      ],
+      "sourceName": "--destructive"
+    },
+    {
+      "name": "--font-display",
+      "value": "Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+      "type": "fontFamily",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Corrected: the project loads Geist through next/font/google as --font-geist and enables Geist's ss01/ss02/cv01 features in the body rule, so Geist is the intended typeface. The importer defaulted to Inter instead. See DESIGN.md — the @theme block never wires --font-sans to this variable, so Tailwind utilities currently resolve to the fallback tail of this stack.",
+      "sources": [
+        "app/layout.tsx:20",
+        "app/globals.css:148"
+      ],
+      "sourceName": "--font-geist"
+    },
+    {
+      "name": "--font-body",
+      "value": "Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif",
+      "type": "fontFamily",
+      "layer": "A1-identity",
+      "confidence": "high",
+      "reason": "Same face as --font-display: this product uses one family for interface and reading text.",
+      "sources": [
+        "app/layout.tsx:20"
+      ],
+      "sourceName": "--font-geist"
+    },
+    {
+      "name": "--font-mono",
+      "value": "\"Geist Mono\", ui-monospace, \"SF Mono\", \"Cascadia Code\", \"Fira Code\", \"JetBrains Mono\", Menlo, Monaco, Consolas, monospace",
+      "type": "fontFamily",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Corrected: Geist Mono is loaded as --font-geist-mono and backs the font-mono utilities in the chat console, slash commands and code blocks. The CodeMirror editor additionally leads with a native stack (SF Mono / Cascadia Code / Fira Code / JetBrains Mono); those are folded in here as fallbacks.",
+      "sources": [
+        "app/layout.tsx:26",
+        "app/globals.css:385"
+      ],
+      "sourceName": "--font-geist-mono"
+    },
+    {
+      "name": "--text-xs",
+      "value": "0.75rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Tailwind v4 default type scale. The project's @theme block overrides radius and color only, so its text-* utilities render these framework sizes. Interface chrome additionally uses arbitrary text-[12px]/text-[13px] steps.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-sm",
+      "value": "0.875rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Tailwind v4 default type scale; no project override.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-base",
+      "value": "1rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Tailwind v4 default type scale; no project override.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-lg",
+      "value": "1.125rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Tailwind v4 default type scale; no project override.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-xl",
+      "value": "1.25rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Corrected to the Tailwind v4 default (1.25rem). The importer had written 1.375rem, a value belonging to neither Tailwind nor the project.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-2xl",
+      "value": "1.5rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Corrected to the Tailwind v4 default (1.5rem); the importer had written 1.75rem.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-3xl",
+      "value": "1.875rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Corrected to the Tailwind v4 default (1.875rem); the importer had written 2.25rem.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--text-4xl",
+      "value": "2.25rem",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "medium",
+      "reason": "Corrected to the Tailwind v4 default (2.25rem); the importer had written 3rem. This is the chat thread heading tier.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--leading-body",
+      "value": "1.6",
+      "type": "number",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected: the source sets p { line-height: 1.6 }. The importer had written 1.55.",
+      "sources": [
+        "app/globals.css:187"
+      ]
+    },
+    {
+      "name": "--leading-tight",
+      "value": "1.2",
+      "type": "number",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected: the source sets h1–h6 { line-height: 1.2 }. The importer had written 1.15.",
+      "sources": [
+        "app/globals.css:182"
+      ]
+    },
+    {
+      "name": "--tracking-display",
+      "value": "-0.025em",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected: the source sets h1–h6 { letter-spacing: -0.025em }. The importer had written 0, discarding a defining part of the product's heading voice.",
+      "sources": [
+        "app/globals.css:183"
+      ]
+    },
+    {
+      "name": "--space-1",
+      "value": "4px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step; the project defines no spacing override.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-2",
+      "value": "8px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step (gap-2).",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-3",
+      "value": "12px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step (gap-3).",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-4",
+      "value": "16px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step; the desktop thread gutter.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-5",
+      "value": "20px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step; the phone-tier gap between messages (gap-5).",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-6",
+      "value": "24px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step (py-6).",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-8",
+      "value": "32px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--space-12",
+      "value": "48px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind v4 4px base spacing step.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--section-y-desktop",
+      "value": "96px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "fallback",
+      "reason": "Not applicable. This is a full-viewport chat shell with no scrolling marketing sections, so no section rhythm exists in the source. Schema default retained and flagged rather than presented as extracted.",
+      "sources": []
+    },
+    {
+      "name": "--section-y-tablet",
+      "value": "68px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "fallback",
+      "reason": "Not applicable — same reason as --section-y-desktop.",
+      "sources": []
+    },
+    {
+      "name": "--section-y-phone",
+      "value": "48px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "fallback",
+      "reason": "Not applicable — same reason as --section-y-desktop.",
+      "sources": []
+    },
+    {
+      "name": "--radius-sm",
+      "value": "0.375rem",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Corrected: the source @theme defines --radius-sm: calc(var(--radius) - 4px) = 6px, with --radius at 0.625rem. The importer had ignored the derivation and written the 8px schema default.",
+      "sources": [
+        "app/globals.css:12",
+        "app/globals.css:50"
+      ],
+      "sourceName": "--radius-sm"
+    },
+    {
+      "name": "--radius-md",
+      "value": "0.5rem",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Corrected: the source @theme defines --radius-md: calc(var(--radius) - 2px) = 8px. The importer had bound the bare --radius value here, overshooting every medium control.",
+      "sources": [
+        "app/globals.css:13",
+        "app/globals.css:50"
+      ],
+      "sourceName": "--radius-md"
+    },
+    {
+      "name": "--radius-lg",
+      "value": "0.625rem",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Corrected: the source @theme defines --radius-lg: var(--radius) = 10px — the card and modal radius the product is built around. The importer had written the 16px schema default.",
+      "sources": [
+        "app/globals.css:14"
+      ],
+      "sourceName": "--radius-lg"
+    },
+    {
+      "name": "--radius-pill",
+      "value": "9999px",
+      "type": "dimension",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "The source uses border-radius: 9999px for true pills (scrollbar thumb, avatars, badges).",
+      "sources": [
+        "app/globals.css:478"
+      ]
+    },
+    {
+      "name": "--elev-flat",
+      "value": "none",
+      "type": "shadow",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "The project separates flat surfaces with borders rather than shadow; --shadow-composer is deliberately only 1px of contact shadow.",
+      "sources": [
+        "app/globals.css:86"
+      ]
+    },
+    {
+      "name": "--elev-ring",
+      "value": "0 0 0 1px var(--border)",
+      "type": "shadow",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Corrected: the source expresses hairlines as 1px borders colored --border. The importer had bound --ring here, but --ring is a focus color, not a shadow, so the slot carried the wrong value type.",
+      "sources": [
+        "app/globals.css:66",
+        "app/globals.css:68"
+      ]
+    },
+    {
+      "name": "--elev-raised",
+      "value": "0 1px 3px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.03)",
+      "type": "shadow",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Source --shadow-card. Extremely restrained by design: the product signals lift with near-invisible contact shadow plus a border.",
+      "sources": [
+        "app/globals.css:83"
+      ],
+      "sourceName": "--shadow-card"
+    },
+    {
+      "name": "--focus-ring",
+      "value": "0 0 0 1px oklch(0.5 0 0), 0 2px 8px -2px oklch(0 0 0 / 0.06)",
+      "type": "shadow",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Derived from two real source values: the project's --ring color (oklch(0.5 0 0)) at the schema's 1px ring shape, combined with --shadow-composer-focus, the product's actual focused-control shadow. Caveat recorded in DESIGN.md: globals.css blanks native focus outlines, so any generated UI must supply its own visible focus ring.",
+      "sources": [
+        "app/globals.css:68",
+        "app/globals.css:87",
+        "app/globals.css:191"
+      ],
+      "sourceName": "--ring"
+    },
+    {
+      "name": "--motion-fast",
+      "value": "150ms",
+      "type": "duration",
+      "layer": "A2",
+      "confidence": "medium",
+      "reason": "Tailwind's default transition duration, which the component layer's transition-colors/hover states rely on. The project names no shorter duration.",
+      "sources": [
+        "app/globals.css:11"
+      ]
+    },
+    {
+      "name": "--motion-base",
+      "value": "200ms",
+      "type": "duration",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Source fade-in animation runs 0.2s; message-in runs 0.3s and is the message-level tier.",
+      "sources": [
+        "app/globals.css:349",
+        "app/globals.css:368"
+      ]
+    },
+    {
+      "name": "--ease-standard",
+      "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "type": "cubicBezier",
+      "layer": "A2",
+      "confidence": "high",
+      "reason": "Corrected: bound to source --ease-smooth, the project's general-purpose curve. The importer had bound --ease-bounce, which overshoots — using it as the standard ease would make every generated transition springy. --ease-spring and --ease-bounce exist too, but as opt-in micro-motion (see DESIGN.md).",
+      "sources": [
+        "app/globals.css:94"
+      ],
+      "sourceName": "--ease-smooth"
+    },
+    {
+      "name": "--container-max",
+      "value": "896px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected: the chat thread column is mx-auto max-w-4xl (56rem = 896px). The importer had used a 1120px marketing-page default. Note the app shell itself is full-bleed — the sidebar and chat are a flex row, and only the message column is capped.",
+      "sources": [
+        "components/chat/messages.tsx:81"
+      ]
+    },
+    {
+      "name": "--container-gutter-desktop",
+      "value": "16px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected from the thread container's md:px-4 padding. The importer had used a 32px default.",
+      "sources": [
+        "components/chat/messages.tsx:81"
+      ]
+    },
+    {
+      "name": "--container-gutter-tablet",
+      "value": "16px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected from the thread container's md:px-4 padding, which takes effect from the md breakpoint. The importer had used a 24px default.",
+      "sources": [
+        "components/chat/messages.tsx:81"
+      ]
+    },
+    {
+      "name": "--container-gutter-phone",
+      "value": "8px",
+      "type": "dimension",
+      "layer": "A1-structure",
+      "confidence": "high",
+      "reason": "Corrected from the thread container's px-2 padding below md. The importer had used a 16px default. The project's phone gutter is unusually tight to maximize message width.",
+      "sources": [
+        "components/chat/messages.tsx:81"
+      ]
+    }
+  ]
+}
