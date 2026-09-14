@@ -1,8 +1,20 @@
+import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../hooks/useAgentChat";
 import { MarkdownView } from "./MarkdownView";
 import { ProcessBlock } from "./ProcessBlock";
 
 export function MessageList({ messages }: { messages: ChatMessage[] }) {
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  // 内容增长时保持在底部：真正的滚动发生在消息区内部。
+  // 部分环境（如 jsdom）未实现 scrollIntoView，这里做能力判断。
+  useEffect(() => {
+    const node = endRef.current;
+    if (node && typeof node.scrollIntoView === "function") {
+      node.scrollIntoView({ block: "end" });
+    }
+  });
+
   if (messages.length === 0) {
     return (
       <div className="empty-state">
@@ -54,6 +66,7 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
           </article>
         );
       })}
+      <div ref={endRef} />
     </div>
   );
 }

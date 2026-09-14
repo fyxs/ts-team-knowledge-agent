@@ -4,7 +4,7 @@
 
 *{box-sizing:border-box}
 
-html,body,#root{height:100%}
+html,body,#root{height:100%;overflow:hidden}
 
 body{
   margin:0;
@@ -22,11 +22,15 @@ body{
   max-width:var(--content-max);
   margin:0 auto;
   padding:var(--space-6) var(--container-gutter-desktop);
-  min-height:100%;
+  height:100%;
+  height:100dvh;
   display:flex;
   flex-direction:column;
   gap:var(--space-5);
 }
+
+/* 对话滚动只发生在消息区：面板与外壳都不产生页面级滚动 */
+.chat-panel{overflow:hidden}
 
 /* ---------- 顶栏 ---------- */
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--border)}
