@@ -15,6 +15,9 @@ from ts_knowledge_agent.config import Settings
 
 DEFAULT_MAX_STEPS = 6
 
+# 只有实际检索或读取过的文档才算引用；list/status 返回的是清单，不作为依据。
+CITATION_TOOLS = frozenset({"knowledge_search", "knowledge_read"})
+
 __all__ = [
     "AgentResult",
     "AnthropicProvider",
@@ -154,7 +157,8 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
         })
         for call in reply.tool_calls:
             output = dispatch_tool(settings, active_skills, call["name"], call["arguments"])
-            citations.extend(_paths_from(output))
+            if call["name"] in CITATION_TOOLS:
+                citations.extend(_paths_from(output))
             transcript.append({"role": "tool", "tool_call_id": call["id"], "content": output})
     return AgentResult(answer="", citations=_unique(citations), steps=max_steps, error="max_steps_exceeded", transcript=transcript)
 
