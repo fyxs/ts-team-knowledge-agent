@@ -72,7 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     config_set.add_argument("--model")
     config_set.add_argument("--base-url")
     config_set.add_argument("--max-tokens", type=int)
-    config_sub.add_parser("set-key")
+    config_key = config_sub.add_parser("set-key")
+    config_key.add_argument("--from-file", dest="key_file", help="从文件读取密钥（适合不方便交互输入时）")
+    config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -210,7 +212,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps({"updated": updates, "config_path": str(config_path)}, ensure_ascii=False, indent=2))
             return 0
         if action == "set-key":
-            api_key = getpass.getpass("model API key (input hidden): ").strip()
+            if getattr(args, "value", None):
+                print(
+                    "refused: do not pass the api key as a command argument;\n"
+                    "it would leak into shell history and logs.\n"
+                    "use the interactive prompt (ts-team-kb config set-key) "
+                    "or --from-file <path>."
+                )
+                return 2
+            key_file = getattr(args, "key_file", None)
+            if key_file:
+                source = Path(key_file).expanduser()
+                if not source.is_file():
+                    print(f"key file not found: {source}")
+                    return 2
+                api_key = source.read_text(encoding="utf-8-sig").strip()
+            else:
+                api_key = getpass.getpass("model API key (input hidden): ").strip()
             if not api_key:
                 print("empty input, nothing written")
                 return 2
