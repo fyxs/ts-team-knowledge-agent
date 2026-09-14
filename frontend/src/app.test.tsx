@@ -180,6 +180,10 @@ describe("agent chat shell", () => {
     expect(dialog?.textContent).toContain("运行配置");
     expect((container?.querySelector(".modal-body input") as HTMLInputElement).value).toBe("ts_proxy");
 
+    expect(container?.querySelector(".modal-footer .save-button")).not.toBeNull();
+    const bodyText = container?.querySelector(".modal-body")?.textContent ?? "";
+    expect(bodyText).toContain("API Key");
+
     const modelInput = container?.querySelectorAll(".modal-body input")[1] as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
     await act(async () => {

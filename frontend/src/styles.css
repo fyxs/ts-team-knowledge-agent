@@ -234,3 +234,9 @@ body{
 .modal-body::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ---------- 弹窗底部操作区（固定） ---------- */
+.modal-footer{flex:0 0 auto;padding:var(--space-4) var(--space-6);border-top:1px solid var(--border);background:var(--surface)}
+.modal-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
+.modal-footer .save-button{margin:0;width:auto;padding:var(--space-2) var(--space-5)}
+.modal-footer .settings-status{color:var(--fg-2);font-size:var(--text-xs)}

@@ -4,10 +4,12 @@ type Props = {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** 固定在底部的操作区；只放主操作与结果提示，不随内容滚动。 */
+  footer?: ReactNode;
 };
 
-/** 通用弹窗容器：支持 Esc 关闭、点击遮罩关闭。 */
-export function Modal({ title, onClose, children }: Props) {
+/** 通用弹窗容器：头部与底部固定，仅中间内容区滚动；Esc 与点击遮罩关闭。 */
+export function Modal({ title, onClose, children, footer }: Props) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -30,6 +32,7 @@ export function Modal({ title, onClose, children }: Props) {
           <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">×</button>
         </div>
         <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
       </div>
     </div>
   );

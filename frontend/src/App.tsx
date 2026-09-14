@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
-import { Modal } from "./components/Modal";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAgentChat } from "./hooks/useAgentChat";
 import { useTheme } from "./hooks/useTheme";
@@ -46,11 +45,7 @@ export default function App() {
         </div>
       </section>
 
-      {settingsOpen && (
-        <Modal title="运行配置" onClose={() => setSettingsOpen(false)}>
-          <SettingsPanel />
-        </Modal>
-      )}
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </main>
   );
 }

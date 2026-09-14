@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Modal } from "./Modal";
 import {
   fetchModelConfig,
   fetchRunStatus,
@@ -28,7 +29,7 @@ function describeRun(status: RunStatus): string {
   return "尚无运行记录";
 }
 
-export function SettingsPanel() {
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [config, setConfig] = useState<ModelConfig | null>(null);
   const [draft, setDraft] = useState<ModelConfig | null>(null);
   const [configStatus, setConfigStatus] = useState("");
@@ -100,7 +101,11 @@ export function SettingsPanel() {
   };
 
   if (!draft) {
-    return <p className="settings-note">{configStatus || "加载中…"}</p>;
+    return (
+      <Modal title="运行配置" onClose={onClose}>
+        <p className="settings-note">{configStatus || "加载中…"}</p>
+      </Modal>
+    );
   }
 
   const dirty =
@@ -132,7 +137,19 @@ export function SettingsPanel() {
   };
 
   return (
-    <div className="settings-panel">
+    <Modal
+      title="运行配置"
+      onClose={onClose}
+      footer={
+        <div className="modal-footer-inner">
+          {configStatus && <span className="settings-status">{configStatus}</span>}
+          <button type="button" className="save-button" onClick={save} disabled={!dirty}>
+            保存配置
+          </button>
+        </div>
+      }
+    >
+      <div className="settings-panel">
       <section className="settings-section">
         <h3 className="settings-section-title">模型</h3>
         {FIELDS.map((field) => (
@@ -208,13 +225,14 @@ export function SettingsPanel() {
         <span className="field-hint">拉取只在工作区干净时执行；推送会先提交本轮产生的知识再推送。</span>
       </section>
 
-      <button type="button" className="save-button" onClick={save} disabled={!dirty}>保存配置</button>
-
-      <div className="settings-note">
-        <div>API Key：{draft.api_key}</div>
-        <div>密钥不在此处修改，请用 <code>ts-team-kb config set-key</code>。</div>
-        {configStatus && <div className="settings-status">{configStatus}</div>}
+      <section className="settings-section">
+        <h3 className="settings-section-title">密钥</h3>
+        <div className="settings-note">
+          <div>API Key：{draft.api_key}</div>
+          <div>密钥不在此处修改，请用 <code>ts-team-kb config set-key</code>。</div>
+        </div>
+      </section>
       </div>
-    </div>
+    </Modal>
   );
 }
