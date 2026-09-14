@@ -48,3 +48,18 @@
 - 日常开发与修复在 `dev` 分支进行，不直接向 `main` 提交。
 - 提交到 `dev` 前仍须通过第 3 节验证的全部检查。
 - 需要进入 `main` 时，先确认验证通过，再由用户确认合并。
+
+## 7. 前端改动的附加要求
+
+1. 先读 `docs/frontend-stack.md`，确认技术栈与依赖纪律。
+2. 视觉改动只动 token 与组件样式，不引入新的颜色/间距硬编码。
+3. 组件改动必须同步更新或新增测试（vitest + jsdom，不依赖真实后端）。
+4. 提交前执行 `pnpm typecheck && pnpm test && pnpm build`，三者全绿才算完成。
+
+## 8. 与本机 DLP 共存
+
+- 读写仓库文本文件优先用 `git show` / Python / Node；不要用 PowerShell 直接读字节或写文件，
+  否则会出现「文件看起来损坏」或「写入被回滚但仍显示成功」的假象。
+- 发现文件被独占锁定（Permission denied / unable to unlink）时停下来确认占用来源，
+  不要删除或覆盖，也不要用 `git update-index --skip-worktree` 长期绕过——那只是临时手段，
+  恢复后必须解除。

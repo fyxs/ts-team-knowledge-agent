@@ -70,6 +70,9 @@
   --elev-ring:                 0 0 0 1px var(--border);
   --elev-raised:               0 1px 3px oklch(0 0 0 / 0.05), 0 1px 1px oklch(0 0 0 / 0.03);
 
+  /* 浮层阴影：抽屉、弹窗等脱离文档流的表面 */
+  --elev-float:                0 12px 32px oklch(0 0 0 / 0.18);
+
   /* Focus */
   --focus-ring:                0 0 0 1px oklch(0.5 0 0), 0 2px 8px -2px oklch(0 0 0 / 0.06);
 
@@ -87,11 +90,16 @@
   /* 应用扩展 token（源设计体系未定义）
    * --overlay   弹窗遮罩
    * --content-max 主区域内容宽度阶梯：默认沿用设计体系的 container-max，
-   *               宽屏下按断点递增，避免两侧过度留白。 */
+   *               宽屏下按断点递增，避免两侧过度留白。
+   * --session-panel-w 历史会话列宽度。
+   * --content-max-sessions 含会话列时的主区域上限：会话列展开时主区域要额外
+   *               容纳一列，取它与 --content-max 的较大值，避免消息列被压窄。 */
   --overlay:                   oklch(0 0 0 / 0.28);
   --content-max:               var(--container-max);
   --content-max-wide:          1080px;
   --content-max-ultrawide:     1200px;
+  --session-panel-w:           264px;
+  --content-max-sessions:      1180px;
 
   color-scheme: light;
 }

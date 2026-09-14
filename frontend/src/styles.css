@@ -41,7 +41,7 @@ body{
 .topbar-actions{display:flex;align-items:center;gap:var(--space-3)}
 .connection-status{display:inline-flex;align-items:center;gap:var(--space-2);color:var(--meta);font-size:var(--text-xs)}
 .connection-status i{width:6px;height:6px;border-radius:var(--radius-pill);background:var(--success);display:inline-block}
-.settings-button,.theme-toggle,.composer button,.save-button{
+.settings-button,.theme-toggle,.session-toggle,.composer button,.save-button{
   border:1px solid var(--border);
   border-radius:var(--radius-md);
   background:var(--surface);
@@ -52,13 +52,13 @@ body{
   cursor:pointer;
   transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard);
 }
-.settings-button:hover,.theme-toggle:hover,.composer button:hover:not(:disabled),.save-button:hover:not(:disabled){background:var(--accent-hover);border-color:var(--border-soft)}
-.settings-button:active,.theme-toggle:active,.composer button:active:not(:disabled),.save-button:active:not(:disabled){background:var(--accent-active)}
-.settings-button:focus-visible,.theme-toggle:focus-visible,.composer button:focus-visible,.save-button:focus-visible,.settings-panel input:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.settings-button:hover,.theme-toggle:hover,.session-toggle:hover,.composer button:hover:not(:disabled),.save-button:hover:not(:disabled){background:var(--accent-hover);border-color:var(--border-soft)}
+.settings-button:active,.theme-toggle:active,.session-toggle:active,.composer button:active:not(:disabled),.save-button:active:not(:disabled){background:var(--accent-active)}
+.settings-button:focus-visible,.theme-toggle:focus-visible,.session-toggle:focus-visible,.composer button:focus-visible,.save-button:focus-visible,.settings-panel input:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .composer textarea:focus-visible{outline:none}
 
 /* ---------- 对话面板 ---------- */
-.chat-layout{width:100%;flex:1;min-height:0;display:flex;flex-direction:column}
+.chat-layout{width:100%;flex:1;min-height:0;display:grid;grid-template-columns:var(--session-panel-w) minmax(0,1fr);gap:var(--space-5)}
 .chat-panel{
   display:flex;flex-direction:column;width:100%;
   flex:1;min-height:0;
