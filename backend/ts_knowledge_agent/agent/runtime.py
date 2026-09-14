@@ -39,6 +39,9 @@ class AgentResult:
     prompt_version: str = SYSTEM_PROMPT_VERSION
     error: str | None = None
     transcript: list[dict] = field(default_factory=list)
+    # 本轮是否真正检索过知识库。模型偶尔会跳过检索直接作答，
+    # 这里给出可判定的事实，供调用方提示或拦截。
+    retrieved: bool = False
 
 
 class OpenAICompatibleProvider:
@@ -148,12 +151,20 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
         {"role": "user", "content": question},
     ]
     citations: list[str] = []
+    nudged = False
     emit({"type": "start", "question": question})
     for step in range(1, max_steps + 1):
         reply = provider.chat(list(transcript), TOOL_SCHEMAS)
         if reply.error:
             emit({"type": "error", "error": reply.error, "step": step})
-            return AgentResult(answer="", citations=_unique(citations), steps=step, error=reply.error, transcript=transcript)
+            return AgentResult(
+                    answer="",
+                    citations=_unique(citations),
+                    steps=step,
+                    error=reply.error,
+                    transcript=transcript,
+                    retrieved=bool(citations),
+                )
         if not reply.tool_calls:
             content = (reply.content or "").strip()
             markup = _tool_markup_marker(content)
@@ -166,8 +177,24 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     error=f"provider returned tool markup as text ({markup}); tools were not honored",
                     transcript=transcript,
                 )
-            emit({"type": "answer", "content": content, "citations": _unique(citations), "steps": step})
-            return AgentResult(answer=content, citations=_unique(citations), steps=step, transcript=transcript)
+            if not citations and not nudged and step < max_steps:
+                nudged = True
+                emit({"type": "notice", "message": "模型未检索即作答，已要求其先检索知识库"})
+                transcript.append(
+                    {
+                        "role": "user",
+                        "content": "注意：涉及团队知识的事实性问题必须先调用 knowledge_search 检索，并引用检索到的来源。请先检索再作答。",
+                    }
+                )
+                continue
+            emit({"type": "answer", "content": content, "citations": _unique(citations), "steps": step, "retrieved": bool(citations)})
+            return AgentResult(
+                answer=content,
+                citations=_unique(citations),
+                steps=step,
+                transcript=transcript,
+                retrieved=bool(citations),
+            )
         transcript.append({
             "role": "assistant",
             "content": reply.content or "",
@@ -184,7 +211,14 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
             emit({"type": "tool_result", "name": call["name"], "paths": found, "step": step})
             transcript.append({"role": "tool", "tool_call_id": call["id"], "content": output})
     emit({"type": "error", "error": "max_steps_exceeded", "step": max_steps})
-    return AgentResult(answer="", citations=_unique(citations), steps=max_steps, error="max_steps_exceeded", transcript=transcript)
+    return AgentResult(
+        answer="",
+        citations=_unique(citations),
+        steps=max_steps,
+        error="max_steps_exceeded",
+        transcript=transcript,
+        retrieved=bool(citations),
+    )
 
 
 def _paths_from(output: str) -> list[str]:

@@ -25,6 +25,11 @@ function defaultHandler(url: string, init?: RequestInit): Response {
   return new Response("{}", { status: 200 });
 }
 
+const UNRETRIEVED_STREAM = [
+  'data: {"type":"start","question":"q"}\n\n',
+  'data: {"type":"answer","content":"我直接作答。","citations":[],"steps":1,"retrieved":false}\n\n',
+];
+
 const STREAM = [
   'data: {"type":"start","question":"架构？"}\n\n',
   'data: {"type":"tool_call","name":"knowledge_search","arguments":{"query":"组件库 架构"},"step":1}\n\n',
@@ -284,6 +289,32 @@ describe("agent chat shell", () => {
     const repoSections = sections.filter((section) => section.textContent?.includes("共享知识仓"));
     expect(repoSections.length).toBe(1);
     expect(repoSections[0].textContent).toContain("推送结果：pushed");
+  });
+
+  it("warns when an answer was produced without retrieval", async () => {
+    stubFetch((url, init) => {
+      if (url.includes("/api/v1/chat/stream")) return sseResponse(UNRETRIEVED_STREAM);
+      return defaultHandler(url, init);
+    });
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const textarea = container?.querySelector("textarea") as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(textarea, "随便问问");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".composer button") as HTMLButtonElement).click();
+    });
+    await flush();
+    await flush();
+
+    expect(container?.querySelector(".unretrieved-note")?.textContent).toContain("未检索知识库");
   });
 
   it("closes the settings modal on Escape", async () => {

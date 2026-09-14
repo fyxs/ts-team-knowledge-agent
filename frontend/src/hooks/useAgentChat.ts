@@ -11,7 +11,7 @@ export type ToolStep = {
 export type ChatMessage =
   | { kind: "user"; id: number; content: string }
   | { kind: "process"; id: number; steps: ToolStep[]; running: boolean; startedAt: number; durationMs?: number }
-  | { kind: "answer"; id: number; content: string; citations: string[]; steps: number; durationMs: number }
+  | { kind: "answer"; id: number; content: string; citations: string[]; steps: number; durationMs: number; retrieved: boolean }
   | { kind: "error"; id: number; message: string };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -97,6 +97,7 @@ export function useAgentChat() {
             citations: event.citations ?? [],
             steps: event.steps ?? 0,
             durationMs,
+            retrieved: event.retrieved !== false,
           },
         ]);
         return;

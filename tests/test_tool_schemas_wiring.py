@@ -6,6 +6,12 @@ from ts_knowledge_agent.config import Settings
 
 
 class RecordingProvider:
+    """记录每次调用可见的工具 schema。
+
+    注意：模型若不检索直接作答，运行时会给一次「先检索」提醒并要求再答一轮，
+    因此需要准备至少两条回答，避免脚本提前耗尽。
+    """
+
     def __init__(self, replies):
         self.replies = list(replies)
         self.tools_seen: list[list] = []
@@ -25,7 +31,8 @@ def _settings(tmp_path: Path) -> Settings:
 
 def test_run_agent_sends_tool_schemas_to_provider(tmp_path):
     settings = _settings(tmp_path)
-    provider = RecordingProvider([ProviderReply(content="没有可用知识。", tool_calls=[])])
+    answer = ProviderReply(content="没有可用知识。", tool_calls=[])
+    provider = RecordingProvider([answer, ProviderReply(content="没有可用知识。", tool_calls=[])])
 
     run_agent(settings, "团队组件库架构？", provider)
 
@@ -37,7 +44,12 @@ def test_run_agent_sends_tool_schemas_to_provider(tmp_path):
 
 def test_run_agent_tool_schemas_match_definition(tmp_path):
     settings = _settings(tmp_path)
-    provider = RecordingProvider([ProviderReply(content="ok", tool_calls=[])])
+    provider = RecordingProvider(
+        [
+            ProviderReply(content="ok", tool_calls=[]),
+            ProviderReply(content="ok", tool_calls=[]),
+        ]
+    )
 
     run_agent(settings, "问题", provider)
 
@@ -57,9 +69,12 @@ def test_run_agent_flags_tool_markup_output_as_error(tmp_path):
 
 def test_run_agent_accepts_normal_answer(tmp_path):
     settings = _settings(tmp_path)
-    provider = RecordingProvider([ProviderReply(content="知识库中没有找到相关内容。", tool_calls=[])])
+    first = ProviderReply(content="第一次直接回答。", tool_calls=[])
+    second = ProviderReply(content="知识库中没有找到相关内容。", tool_calls=[])
+    provider = RecordingProvider([first, second])
 
     result = run_agent(settings, "问题", provider)
 
     assert result.error is None
     assert result.answer == "知识库中没有找到相关内容。"
+    assert result.retrieved is False

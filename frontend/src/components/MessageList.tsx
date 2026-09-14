@@ -45,6 +45,9 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
           return (
             <article className="message message-assistant" key={message.id}>
               <div className="message-label">知识 Agent</div>
+              {!message.retrieved && (
+                <p className="unretrieved-note">本次回答未检索知识库，请谨慎采纳。</p>
+              )}
               <MarkdownView content={message.content} />
               {message.citations.length > 0 && (
                 <div className="citation">

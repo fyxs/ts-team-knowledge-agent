@@ -2,7 +2,8 @@ export type AgentEvent =
   | { type: "start"; question: string }
   | { type: "tool_call"; name: string; arguments: Record<string, unknown>; step: number }
   | { type: "tool_result"; name: string; summary: string; step: number }
-  | { type: "answer"; content: string; citations: string[]; steps: number }
+  | { type: "answer"; content: string; citations: string[]; steps: number; retrieved?: boolean }
+  | { type: "notice"; message: string }
   | { type: "error"; error: string; step?: number };
 
 export type ModelConfig = {

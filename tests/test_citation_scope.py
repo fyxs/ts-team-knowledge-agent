@@ -27,14 +27,17 @@ def _settings(tmp_path: Path) -> Settings:
 
 def test_list_results_do_not_become_citations(tmp_path):
     settings = _settings(tmp_path)
+    # 列目录不算引用；因此该轮结束后会触发一次「先检索」提醒，再给出回答。
     provider = ScriptedProvider(
         [
             ProviderReply(content="", tool_calls=[{"id": "1", "name": "knowledge_list", "arguments": {}}]),
             ProviderReply(content="结论：见文档。", tool_calls=[]),
+            ProviderReply(content="结论：仍然只列了目录。", tool_calls=[]),
         ]
     )
-    result = run_agent(settings, "知识库有哪些文档？", provider, skills=[], max_steps=3)
+    result = run_agent(settings, "知识库有哪些文档？", provider, skills=[], max_steps=4)
     assert result.citations == []
+    assert result.retrieved is False
 
 
 def test_read_results_become_citations(tmp_path):
@@ -50,6 +53,7 @@ def test_read_results_become_citations(tmp_path):
     )
     result = run_agent(settings, "组件库用什么模式？", provider, skills=[], max_steps=3)
     assert result.citations == ["members/whm/a/a.md"]
+    assert result.retrieved is True
 
 
 def test_search_results_become_citations(tmp_path):

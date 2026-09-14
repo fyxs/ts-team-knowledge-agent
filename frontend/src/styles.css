@@ -240,3 +240,6 @@ body{
 .modal-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
 .modal-footer .save-button{margin:0;width:auto;padding:var(--space-2) var(--space-5)}
 .modal-footer .settings-status{color:var(--fg-2);font-size:var(--text-xs)}
+
+/* 未检索知识库时的提示：与错误态区分，用警告色 */
+.unretrieved-note{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border:1px solid color-mix(in oklab, var(--warn) 45%, var(--border));border-radius:var(--radius-md);background:color-mix(in oklab, var(--warn) 10%, var(--surface));color:var(--fg-2);font-size:var(--text-xs)}

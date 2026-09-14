@@ -150,6 +150,7 @@ def chat(request: ChatRequest) -> dict:
         "citations": result.citations,
         "steps": result.steps,
         "error": result.error,
+        "retrieved": result.retrieved,
     }
 
 
