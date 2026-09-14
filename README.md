@@ -139,3 +139,32 @@ agent/                         给编码 Agent 的规范（入口 AGENT.md / CLA
 排查文件内容时优先用 git show 或 Python/Node 读取，不要用 PowerShell 直接读字节，
 否则会把正常文件误判为"损坏"。
 ```
+
+### 典型报错
+
+```text
+PermissionError: [Errno 13] Permission denied             读取被拒
+error: unable to unlink old '<file>': Invalid argument     git 无法替换该文件
+文件开头出现 E-SafeNet / LOCK 的二进制内容                 读到的是密文而不是内容
+```
+
+### 文件被锁住时
+
+```text
+1. 关掉可能打开该文件的程序（编辑器、预览工具）——多数情况即时释放
+2. 仍锁定：注销再登录
+3. 仍锁定：重启机器
+4. 都无效：找 IT。不要自行卸载或禁用，这是公司合规管控
+```
+
+### Git 侧临时手段
+
+某个被锁文件阻塞提交时，可临时跳过它的本地变更（仓库内已提交的内容仍是正确明文）：
+
+```bash
+git update-index --skip-worktree <path>     # 临时跳过本地变更
+git update-index --no-skip-worktree <path>  # 恢复正常跟踪
+git checkout -- <path>                      # 用仓库版本覆盖本地
+```
+
+`git ls-files -v <path>` 输出以 `S` 开头即表示当前处于跳过状态。
