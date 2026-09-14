@@ -38,7 +38,7 @@ class Settings:
         working_directory = Path(os.getenv("TS_KB_WORKING_DIRECTORY", ".local")).expanduser()
         config_path = Path(os.getenv("TS_KB_CONFIG", str(working_directory / "ts-kb.json"))).expanduser()
         if not config_path.is_file():
-            raise FileNotFoundError(f"configuration file not found: {config_path}; run ts-kb init first")
+            raise FileNotFoundError(f"configuration file not found: {config_path}; run ts-team-kb init first")
         return cls.from_file(config_path)
 
     @classmethod
