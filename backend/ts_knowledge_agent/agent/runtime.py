@@ -135,26 +135,30 @@ def create_provider_from_env() -> Provider | None:
     return OpenAICompatibleProvider(normalize_openai_base_url(base_url), api_key, model)
 
 
-def run_agent(settings: Settings, question: str, provider: Provider, skills: list[Skill] | None = None, max_steps: int = DEFAULT_MAX_STEPS) -> AgentResult:
+def run_agent(settings: Settings, question: str, provider: Provider, skills: list[Skill] | None = None, max_steps: int = DEFAULT_MAX_STEPS, on_event=None) -> AgentResult:
     """最小 Agent 循环：模型调用工具、运行时执行并把结果回灌，直到模型给出最终回答。"""
 
     question = (question or "").strip()
     if not question:
         raise ValueError("question must not be empty")
+    emit = on_event or (lambda event: None)
     active_skills = load_skills() if skills is None else skills
     transcript: list[dict] = [
         {"role": "system", "content": build_system_prompt(active_skills)},
         {"role": "user", "content": question},
     ]
     citations: list[str] = []
+    emit({"type": "start", "question": question})
     for step in range(1, max_steps + 1):
         reply = provider.chat(list(transcript), TOOL_SCHEMAS)
         if reply.error:
+            emit({"type": "error", "error": reply.error, "step": step})
             return AgentResult(answer="", citations=_unique(citations), steps=step, error=reply.error, transcript=transcript)
         if not reply.tool_calls:
             content = (reply.content or "").strip()
             markup = _tool_markup_marker(content)
             if markup:
+                emit({"type": "error", "error": f"provider returned tool markup as text ({markup})", "step": step})
                 return AgentResult(
                     answer=content,
                     citations=_unique(citations),
@@ -162,6 +166,7 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     error=f"provider returned tool markup as text ({markup}); tools were not honored",
                     transcript=transcript,
                 )
+            emit({"type": "answer", "content": content, "citations": _unique(citations), "steps": step})
             return AgentResult(answer=content, citations=_unique(citations), steps=step, transcript=transcript)
         transcript.append({
             "role": "assistant",
@@ -172,10 +177,13 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
             ],
         })
         for call in reply.tool_calls:
+            emit({"type": "tool_call", "name": call["name"], "arguments": call["arguments"], "step": step})
             output = dispatch_tool(settings, active_skills, call["name"], call["arguments"])
-            if call["name"] in CITATION_TOOLS:
-                citations.extend(_paths_from(output))
+            found = _paths_from(output) if call["name"] in CITATION_TOOLS else []
+            citations.extend(found)
+            emit({"type": "tool_result", "name": call["name"], "paths": found, "step": step})
             transcript.append({"role": "tool", "tool_call_id": call["id"], "content": output})
+    emit({"type": "error", "error": "max_steps_exceeded", "step": max_steps})
     return AgentResult(answer="", citations=_unique(citations), steps=max_steps, error="max_steps_exceeded", transcript=transcript)
 
 

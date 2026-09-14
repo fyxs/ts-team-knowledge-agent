@@ -80,3 +80,14 @@ def configure_model_interactively(
     echo("检查配置：ts-team-kb config show")
     echo("试问一句：ts-team-kb ask \"<你的问题>\"")
     return updated
+
+
+def mask_key(value: str) -> str:
+    """展示用掩码：只暴露是否已配置与末四位。"""
+
+    value = (value or "").strip()
+    if not value:
+        return "not configured"
+    if len(value) >= 8:
+        return "configured (****" + value[-4:] + ")"
+    return "configured"
