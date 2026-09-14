@@ -4,9 +4,11 @@ import { MessageList } from "./components/MessageList";
 import { Modal } from "./components/Modal";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAgentChat } from "./hooks/useAgentChat";
+import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
   const { messages, busy, send, stop } = useAgentChat();
+  const { theme, toggle } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
@@ -21,6 +23,9 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <span className="connection-status"><i /> {busy ? "正在作答" : "就绪"}</span>
+          <button type="button" className="theme-toggle" onClick={toggle} aria-label="切换主题">
+            {theme === "dark" ? "浅色" : "深色"}
+          </button>
           <button type="button" className="settings-button" onClick={() => setSettingsOpen(true)}>
             设置
           </button>

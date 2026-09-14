@@ -83,4 +83,47 @@
   --container-gutter-desktop:  16px;
   --container-gutter-tablet:   16px;
   --container-gutter-phone:    8px;
+
+  /* 应用扩展 token（源设计体系未定义，仅用于遮罩等场景） */
+  --overlay:                   oklch(0 0 0 / 0.28);
+
+  color-scheme: light;
+}
+
+/* 深色主题：沿用同一套 token 名称与单色倾向，只覆盖颜色与层级相关取值。
+ * 排版、间距、圆角、动效与浅色保持一致。 */
+:root[data-theme="dark"] {
+
+  /* Surface */
+  --bg:                        oklch(0.16 0 0);
+  --surface:                   oklch(0.195 0 0);
+  --surface-warm:              oklch(0.23 0 0);
+
+  /* Foreground */
+  --fg:                        oklch(0.97 0 0);
+  --fg-2:                      oklch(0.74 0 0);
+  --muted:                     oklch(0.27 0 0);
+  --meta:                      oklch(0.6 0 0);
+
+  /* Border */
+  --border:                    oklch(0.28 0 0);
+  --border-soft:               oklch(0.33 0 0);
+
+  /* Accent & semantic */
+  --accent:                    oklch(0.27 0 0);
+  --accent-on:                 oklch(0.97 0 0);
+  --accent-hover:              color-mix(in oklab, var(--accent), white 10%);
+  --accent-active:             color-mix(in oklab, var(--accent), white 16%);
+  --danger:                    oklch(0.68 0.16 25);
+
+  /* Elevation */
+  --elev-raised:               0 1px 3px oklch(0 0 0 / 0.45), 0 1px 1px oklch(0 0 0 / 0.3);
+
+  /* Focus */
+  --focus-ring:                0 0 0 1px oklch(0.72 0 0), 0 2px 8px -2px oklch(0 0 0 / 0.5);
+
+  /* 应用扩展 */
+  --overlay:                   oklch(0 0 0 / 0.6);
+
+  color-scheme: dark;
 }

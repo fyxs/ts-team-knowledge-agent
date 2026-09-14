@@ -39,6 +39,8 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 beforeEach(() => {
+  localStorage.clear();
+  document.documentElement.dataset.theme = "dark";
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -181,6 +183,24 @@ describe("agent chat shell", () => {
     await flush();
     expect(calls.length).toBe(1);
     expect((calls[0].body as { model: string }).model).toBe("deepseek-v4-pro");
+  });
+
+  it("defaults to dark and toggles to light with persistence", async () => {
+    stubFetch(() => new Response(JSON.stringify(CONFIG), { status: 200 }));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(container?.querySelector(".theme-toggle")?.textContent).toBe("浅色");
+
+    await act(async () => {
+      (container?.querySelector(".theme-toggle") as HTMLButtonElement).click();
+    });
+    await flush();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(localStorage.getItem("ts-kb-theme")).toBe("light");
+    expect(container?.querySelector(".theme-toggle")?.textContent).toBe("深色");
   });
 
   it("closes the settings modal on Escape", async () => {
