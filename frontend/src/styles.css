@@ -178,3 +178,59 @@ body{
 .settings-actions button:hover:not(:disabled){background:var(--accent-hover)}
 .settings-actions button:disabled{opacity:.45;cursor:not-allowed}
 .settings-actions button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+
+/* ---------- 滚动条：默认隐藏，悬浮时才出现 ---------- */
+/* 覆盖所有可滚动区域：消息列表、弹窗、代码块、宽表格 */
+.messages,
+.modal-panel,
+.markdown-body pre,
+.table-scroll {
+  scrollbar-width: thin;                      /* Firefox */
+  scrollbar-color: transparent transparent;
+}
+.messages:hover,
+.modal-panel:hover,
+.markdown-body pre:hover,
+.table-scroll:hover {
+  scrollbar-color: color-mix(in oklab, var(--fg) 22%, transparent) transparent;
+}
+
+/* Chromium / WebKit：轨道透明，滑块细且带内缩 */
+.messages::-webkit-scrollbar,
+.modal-panel::-webkit-scrollbar,
+.markdown-body pre::-webkit-scrollbar,
+.table-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.messages::-webkit-scrollbar-track,
+.modal-panel::-webkit-scrollbar-track,
+.markdown-body pre::-webkit-scrollbar-track,
+.table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.messages::-webkit-scrollbar-thumb,
+.modal-panel::-webkit-scrollbar-thumb,
+.markdown-body pre::-webkit-scrollbar-thumb,
+.table-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 3px solid transparent;               /* 内缩，视觉上更细 */
+  border-radius: var(--radius-pill);
+  background-clip: content-box;
+}
+.messages:hover::-webkit-scrollbar-thumb,
+.modal-panel:hover::-webkit-scrollbar-thumb,
+.markdown-body pre:hover::-webkit-scrollbar-thumb,
+.table-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--fg) 20%, transparent);
+}
+.messages::-webkit-scrollbar-thumb:hover,
+.modal-panel::-webkit-scrollbar-thumb:hover,
+.markdown-body pre::-webkit-scrollbar-thumb:hover,
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--fg) 32%, transparent);
+}
+.messages::-webkit-scrollbar-corner,
+.modal-panel::-webkit-scrollbar-corner {
+  background: transparent;
+}
