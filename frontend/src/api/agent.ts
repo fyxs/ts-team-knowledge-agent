@@ -11,6 +11,7 @@ export type ModelConfig = {
   base_url: string;
   max_tokens: number;
   max_steps: number;
+  scan_interval_minutes: number;
   api_key: string;
 };
 
@@ -20,7 +21,30 @@ export type ModelConfigPatch = Partial<{
   base_url: string;
   max_tokens: number;
   max_steps: number;
+  scan_interval_minutes: number;
 }>;
+
+export type RunStatus = {
+  running: boolean;
+  started_at: string | null;
+  last: {
+    status?: string;
+    scanned?: number;
+    converted?: number;
+    skipped?: number;
+    failed?: number;
+    indexed?: number;
+    sync_status?: string;
+    error?: string;
+  } | null;
+  report: Record<string, unknown> | null;
+};
+
+export type RepositoryResult = {
+  status: string;
+  commit: string | null;
+  message: string | null;
+};
 
 async function readJson<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -76,4 +100,26 @@ export async function streamQuestion(
       onEvent(JSON.parse(payload) as AgentEvent);
     }
   }
+}
+
+export async function fetchRunStatus(): Promise<RunStatus> {
+  return readJson<RunStatus>(await fetch("/api/v1/run"));
+}
+
+export async function triggerRun(options?: { sync?: boolean; batch_size?: number }): Promise<{ status: string }> {
+  return readJson<{ status: string }>(
+    await fetch("/api/v1/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options ?? {}),
+    }),
+  );
+}
+
+export async function pullKnowledgeRepository(): Promise<RepositoryResult> {
+  return readJson<RepositoryResult>(await fetch("/api/v1/repository/pull", { method: "POST" }));
+}
+
+export async function pushKnowledgeRepository(): Promise<RepositoryResult> {
+  return readJson<RepositoryResult>(await fetch("/api/v1/repository/push", { method: "POST" }));
 }

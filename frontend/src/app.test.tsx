@@ -12,8 +12,18 @@ const CONFIG = {
   base_url: "http://192.168.20.200:3000",
   max_tokens: 4096,
   max_steps: 8,
+  scan_interval_minutes: 60,
   api_key: "configured (****klPQ)",
 };
+
+const RUN_STATUS = { running: false, started_at: null, last: null, report: null };
+
+/** 默认路由：配置、运行状态；其余按用例覆写。 */
+function defaultHandler(url: string, init?: RequestInit): Response {
+  if (url.includes("/api/v1/run")) return new Response(JSON.stringify(RUN_STATUS), { status: 200 });
+  if (url.includes("/api/v1/config")) return new Response(JSON.stringify(CONFIG), { status: 200 });
+  return new Response("{}", { status: 200 });
+}
 
 const STREAM = [
   'data: {"type":"start","question":"架构？"}\n\n',
@@ -69,7 +79,7 @@ function stubFetch(handler: (url: string, init?: RequestInit) => Response) {
 
 describe("agent chat shell", () => {
   it("renders the shell and the composer", async () => {
-    stubFetch(() => new Response(JSON.stringify(CONFIG), { status: 200 }));
+    stubFetch((url, init) => defaultHandler(url, init));
     await act(async () => {
       root?.render(<App />);
     });
@@ -80,9 +90,9 @@ describe("agent chat shell", () => {
   });
 
   it("streams tool activity into one collapsed process block and renders markdown answer", async () => {
-    stubFetch((url) => {
+    stubFetch((url, init) => {
       if (url.includes("/api/v1/chat/stream")) return sseResponse(STREAM);
-      return new Response(JSON.stringify(CONFIG), { status: 200 });
+      return defaultHandler(url, init);
     });
     await act(async () => {
       root?.render(<App />);
@@ -116,9 +126,9 @@ describe("agent chat shell", () => {
   });
 
   it("shows an error message when the stream fails", async () => {
-    stubFetch((url) => {
+    stubFetch((url, init) => {
       if (url.includes("/api/v1/chat/stream")) return new Response("boom", { status: 500 });
-      return new Response(JSON.stringify(CONFIG), { status: 200 });
+      return defaultHandler(url, init);
     });
     await act(async () => {
       root?.render(<App />);
@@ -153,7 +163,7 @@ describe("agent chat shell", () => {
         calls.push({ method: "PUT", body: JSON.parse(String(init.body)) });
         return new Response(JSON.stringify({ ...CONFIG, model: "deepseek-v4-pro" }), { status: 200 });
       }
-      return new Response(JSON.stringify(CONFIG), { status: 200 });
+      return defaultHandler(url, init);
     });
     await act(async () => {
       root?.render(<App />);
@@ -186,7 +196,7 @@ describe("agent chat shell", () => {
   });
 
   it("defaults to dark and toggles to light with persistence", async () => {
-    stubFetch(() => new Response(JSON.stringify(CONFIG), { status: 200 }));
+    stubFetch((url, init) => defaultHandler(url, init));
     await act(async () => {
       root?.render(<App />);
     });
@@ -203,8 +213,72 @@ describe("agent chat shell", () => {
     expect(container?.querySelector(".theme-toggle")?.textContent).toBe("深色");
   });
 
+  it("triggers a scan from the settings modal and shows the run state", async () => {
+    const posts: string[] = [];
+    stubFetch((url, init) => {
+      if (init?.method === "POST" && url.includes("/api/v1/run")) {
+        posts.push(url);
+        return new Response(JSON.stringify({ status: "started" }), { status: 200 });
+      }
+      return defaultHandler(url, init);
+    });
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".settings-button") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const scanButton = Array.from(container?.querySelectorAll(".settings-actions button") ?? []).find(
+      (button) => button.textContent === "立即扫描",
+    ) as HTMLButtonElement;
+    await act(async () => {
+      scanButton.click();
+    });
+    await flush();
+    expect(posts.length).toBe(1);
+    expect(container?.textContent).toContain("已触发扫描");
+  });
+
+  it("pulls and pushes the shared knowledge repository", async () => {
+    const calls: string[] = [];
+    stubFetch((url, init) => {
+      if (init?.method === "POST" && url.includes("/api/v1/repository/")) {
+        calls.push(url);
+        return new Response(JSON.stringify({ status: url.includes("pull") ? "pulled" : "pushed", commit: "abcdef123456", message: null }), { status: 200 });
+      }
+      return defaultHandler(url, init);
+    });
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".settings-button") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const buttons = Array.from(container?.querySelectorAll(".settings-actions button") ?? []);
+    const pullButton = buttons.find((button) => button.textContent === "拉取") as HTMLButtonElement;
+    const pushButton = buttons.find((button) => button.textContent === "推送") as HTMLButtonElement;
+    await act(async () => {
+      pullButton.click();
+    });
+    await flush();
+    await act(async () => {
+      pushButton.click();
+    });
+    await flush();
+
+    expect(calls.some((url) => url.includes("/api/v1/repository/pull"))).toBe(true);
+    expect(calls.some((url) => url.includes("/api/v1/repository/push"))).toBe(true);
+    expect(container?.textContent).toContain("推送结果：pushed");
+  });
+
   it("closes the settings modal on Escape", async () => {
-    stubFetch(() => new Response(JSON.stringify(CONFIG), { status: 200 }));
+    stubFetch((url, init) => defaultHandler(url, init));
     await act(async () => {
       root?.render(<App />);
     });

@@ -19,7 +19,7 @@ from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
 from ts_knowledge_agent.services.scanner import scan_directory
-from ts_knowledge_agent.services.scheduler import run_once_with_report, run_scheduler
+from ts_knowledge_agent.services.scheduler import is_scan_due, run_once_with_report, run_scheduler
 
 PROGRAM = "ts-team-kb"
 
@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run-once")
     run.add_argument("--sync", action="store_true")
     run.add_argument("--batch-size", type=int, default=25)
+    run.add_argument("--if-due", action="store_true", help="只有距上次运行达到扫描间隔时才执行本轮")
 
     sub.add_parser("schedule")
 
@@ -166,6 +167,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-once":
         if args.batch_size < 1:
             parser.error("batch-size must be at least 1")
+        if args.if_due and not is_scan_due(settings):
+            print(f"skipped=not_due scan_interval_minutes={settings.scan_interval_minutes}")
+            return 0
         summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
         print(
             f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} "

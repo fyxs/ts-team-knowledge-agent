@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -12,7 +13,9 @@ from pydantic import BaseModel
 from ts_knowledge_agent.agent.runtime import create_provider, run_agent
 from ts_knowledge_agent.agent.secrets import read_api_key, secret_path
 from ts_knowledge_agent.agent.setup import mask_key
+from ts_knowledge_agent.adapters.git_sync import pull_repository, push_repository
 from ts_knowledge_agent.config import Settings
+from ts_knowledge_agent.services.scheduler import run_once_with_report
 
 app = FastAPI(title="TS Knowledge Agent", version="0.1.0")
 
@@ -41,6 +44,31 @@ class ConfigPayload(BaseModel):
     base_url: str | None = None
     max_tokens: int | None = None
     max_steps: int | None = None
+    scan_interval_minutes: int | None = None
+
+
+class RunRequest(BaseModel):
+    sync: bool = True
+    batch_size: int = 25
+
+
+# 手动触发的一轮扫描：后台线程执行，前端轮询 /api/v1/run 获取进度
+_run_state: dict = {"running": False, "started_at": None, "last": None}
+
+
+def last_run_report(settings: Settings) -> dict | None:
+    report = settings.working_directory / "logs" / "runs.jsonl"
+    if not report.is_file():
+        return None
+    for line in reversed(report.read_text(encoding="utf-8", errors="replace").splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+    return None
 
 
 @app.get("/health")
@@ -62,6 +90,7 @@ def get_config() -> dict:
         "base_url": settings.model_base_url,
         "max_tokens": settings.model_max_tokens,
         "max_steps": settings.model_max_steps,
+        "scan_interval_minutes": settings.scan_interval_minutes,
         "api_key": mask_key(read_api_key(settings.working_directory)),
         "api_key_path": str(secret_path(settings.working_directory)),
     }
@@ -83,6 +112,10 @@ def put_config(payload: ConfigPayload) -> dict:
         updates["model_max_tokens"] = int(payload.max_tokens)
     if payload.max_steps is not None:
         updates["model_max_steps"] = int(payload.max_steps)
+    if payload.scan_interval_minutes is not None:
+        if int(payload.scan_interval_minutes) < 1:
+            raise HTTPException(status_code=400, detail="scan_interval_minutes must be at least 1")
+        updates["scan_interval_minutes"] = int(payload.scan_interval_minutes)
     if not updates:
         raise HTTPException(status_code=400, detail="no configuration fields provided")
     updated = replace(settings, **updates)
@@ -144,3 +177,63 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@app.post("/api/v1/run")
+def trigger_run(request: RunRequest | None = None) -> dict:
+    """手动触发一轮扫描与转换；已在运行时返回 busy，不排队也不并发。"""
+    options = request or RunRequest()
+    if _run_state["running"]:
+        return {"status": "busy", "started_at": _run_state["started_at"]}
+    if options.batch_size < 1:
+        raise HTTPException(status_code=400, detail="batch_size must be at least 1")
+    settings = load_settings()
+
+    def worker() -> None:
+        _run_state["running"] = True
+        _run_state["started_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            summary = run_once_with_report(settings, sync=options.sync, batch_size=options.batch_size)
+            _run_state["last"] = {
+                "status": "finished",
+                "scanned": summary.scanned,
+                "queued": summary.queued,
+                "converted": summary.converted,
+                "skipped": summary.skipped,
+                "failed": summary.failed,
+                "indexed": summary.indexed,
+                "sync_status": summary.sync_status,
+                "reason_counts": summary.reason_counts,
+            }
+        except Exception as exc:  # pragma: no cover - 由运行报告记录细节
+            _run_state["last"] = {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
+        finally:
+            _run_state["running"] = False
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"status": "started"}
+
+
+@app.get("/api/v1/run")
+def run_status() -> dict:
+    settings = load_settings()
+    return {
+        "running": _run_state["running"],
+        "started_at": _run_state["started_at"],
+        "last": _run_state["last"],
+        "report": last_run_report(settings),
+    }
+
+
+@app.post("/api/v1/repository/pull")
+def repository_pull() -> dict:
+    settings = load_settings()
+    result = pull_repository(settings.shared_knowledge_repository_directory)
+    return {"status": result.status, "commit": result.commit, "message": result.message}
+
+
+@app.post("/api/v1/repository/push")
+def repository_push() -> dict:
+    settings = load_settings()
+    result = push_repository(settings.shared_knowledge_repository_directory)
+    return {"status": result.status, "commit": result.commit, "message": result.message}

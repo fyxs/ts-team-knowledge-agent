@@ -46,3 +46,38 @@ def run_scheduler(settings: Settings, run: Callable[[Settings],RunSummary]|None=
         if summary.failed or error: exit_code=1
         if max_runs is None or completed<max_runs: sleep(settings.scan_interval_minutes*60)
     return exit_code
+
+
+def last_run_started_at(working_directory: Path) -> datetime | None:
+    """读取运行报告里最近一轮的开始时间；没有记录时返回 None。"""
+    report = Path(working_directory) / "logs" / "runs.jsonl"
+    if not report.is_file():
+        return None
+    for line in reversed(report.read_text(encoding="utf-8", errors="replace").splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        raw = payload.get("started_at")
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+    return None
+
+
+def is_scan_due(settings: Settings, now: datetime | None = None) -> bool:
+    """按配置的扫描间隔判断本轮是否该执行；无历史记录时视为到期。"""
+    last = last_run_started_at(settings.working_directory)
+    if last is None:
+        return True
+    current = now or datetime.now(timezone.utc)
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    elapsed_minutes = (current - last).total_seconds() / 60.0
+    return elapsed_minutes >= float(settings.scan_interval_minutes)
