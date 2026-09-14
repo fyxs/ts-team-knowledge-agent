@@ -43,5 +43,23 @@ class SearchStore:
             snippet(documents_fts, 2, '[', ']', '...', 24) AS snippet
             FROM documents_fts WHERE documents_fts MATCH ? LIMIT ?""", (query, limit)))
 
+    def search_like(self, query: str, limit: int = 10) -> list[sqlite3.Row]:
+        """子串匹配：FTS 分词对中文召回不足时的兜底。"""
+
+        pattern = f"%{query}%"
+        return list(self.connection.execute(
+            "SELECT path, title, content FROM documents WHERE content LIKE ? OR title LIKE ? LIMIT ?",
+            (pattern, pattern, limit)))
+
+    def list_paths(self) -> list[str]:
+        return [row["path"] for row in self.connection.execute("SELECT path FROM documents")]
+
+    def delete_paths(self, paths: list[str]) -> int:
+        for path in paths:
+            self.connection.execute("DELETE FROM documents WHERE path = ?", (path,))
+            self.connection.execute("DELETE FROM documents_fts WHERE path = ?", (path,))
+        self.connection.commit()
+        return len(paths)
+
     def close(self) -> None:
         self.connection.close()

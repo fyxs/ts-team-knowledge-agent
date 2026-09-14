@@ -8,6 +8,12 @@ from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, S
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.indexing import search_converted
+from ts_knowledge_agent.services.knowledge_tools import (
+    knowledge_list,
+    knowledge_read,
+    knowledge_search,
+    knowledge_status,
+)
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.pipeline import run_once
 from ts_knowledge_agent.services.scheduler import run_once_with_report, run_scheduler
@@ -30,6 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("schedule")
     search = sub.add_parser("search"); search.add_argument("query")
     schemas = sub.add_parser("schemas"); schemas.add_argument("--output", required=True, type=Path)
+    ks = sub.add_parser("knowledge-search"); ks.add_argument("query"); ks.add_argument("--limit", type=int, default=5); ks.add_argument("--member")
+    kr = sub.add_parser("knowledge-read"); kr.add_argument("path"); kr.add_argument("--offset", type=int, default=0); kr.add_argument("--limit", type=int, default=200)
+    kl = sub.add_parser("knowledge-list"); kl.add_argument("--member"); kl.add_argument("--prefix"); kl.add_argument("--limit", type=int, default=200)
+    sub.add_parser("knowledge-status")
     return parser
 
 
@@ -64,6 +74,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         state = StateStore(settings.shared_knowledge_repository_directory / "data" / "state.sqlite3")
         try: print(f"sources={len(state.list_sources())} conversions={len(state.list_conversions())} personal_workspace={settings.personal_workspace}")
         finally: state.close()
+        return 0
+    if args.command == "knowledge-search":
+        import json as _json
+        hits = knowledge_search(settings, args.query, limit=args.limit, member=args.member)
+        print(_json.dumps([hit.__dict__ for hit in hits], ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "knowledge-read":
+        import json as _json
+        document = knowledge_read(settings, args.path, offset=args.offset, limit=args.limit)
+        print(_json.dumps(document.__dict__, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "knowledge-list":
+        import json as _json
+        print(_json.dumps(knowledge_list(settings, member=args.member, prefix=args.prefix, limit=args.limit), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "knowledge-status":
+        import json as _json
+        print(_json.dumps(knowledge_status(settings), ensure_ascii=False, indent=2))
         return 0
     if args.command == "schemas":
         for path in write_schema_files(args.output): print(path)
