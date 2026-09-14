@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
+import { Modal } from "./components/Modal";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAgentChat } from "./hooks/useAgentChat";
 
@@ -20,8 +21,8 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <span className="connection-status"><i /> {busy ? "正在作答" : "就绪"}</span>
-          <button type="button" className="settings-button" onClick={() => setSettingsOpen((open) => !open)}>
-            {settingsOpen ? "关闭设置" : "设置"}
+          <button type="button" className="settings-button" onClick={() => setSettingsOpen(true)}>
+            设置
           </button>
         </div>
       </header>
@@ -38,9 +39,13 @@ export default function App() {
           <MessageList messages={messages} />
           <Composer busy={busy} onSend={send} onStop={stop} />
         </div>
-
-        {settingsOpen && <SettingsPanel />}
       </section>
+
+      {settingsOpen && (
+        <Modal title="运行配置" onClose={() => setSettingsOpen(false)}>
+          <SettingsPanel />
+        </Modal>
+      )}
     </main>
   );
 }

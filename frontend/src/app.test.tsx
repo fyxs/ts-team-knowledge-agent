@@ -162,10 +162,13 @@ describe("agent chat shell", () => {
       (container?.querySelector(".settings-button") as HTMLButtonElement).click();
     });
     await flush();
-    expect(container?.textContent).toContain("运行配置");
-    expect((container?.querySelector("input") as HTMLInputElement).value).toBe("ts_proxy");
+    const dialog = container?.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(container?.querySelector(".chat-panel")).not.toBeNull();
+    expect(dialog?.textContent).toContain("运行配置");
+    expect((container?.querySelector(".modal-body input") as HTMLInputElement).value).toBe("ts_proxy");
 
-    const modelInput = container?.querySelectorAll("input")[1] as HTMLInputElement;
+    const modelInput = container?.querySelectorAll(".modal-body input")[1] as HTMLInputElement;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
       setter?.call(modelInput, "deepseek-v4-pro");
@@ -178,5 +181,23 @@ describe("agent chat shell", () => {
     await flush();
     expect(calls.length).toBe(1);
     expect((calls[0].body as { model: string }).model).toBe("deepseek-v4-pro");
+  });
+
+  it("closes the settings modal on Escape", async () => {
+    stubFetch(() => new Response(JSON.stringify(CONFIG), { status: 200 }));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".settings-button") as HTMLButtonElement).click();
+    });
+    await flush();
+    expect(container?.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    await flush();
+    expect(container?.querySelector('[role="dialog"]')).toBeNull();
   });
 });

@@ -22,12 +22,7 @@ export function SettingsPanel() {
   }, []);
 
   if (!draft) {
-    return (
-      <aside className="settings-panel">
-        <div className="panel-title"><span className="eyebrow">RUNTIME SETTINGS</span><h2>运行配置</h2></div>
-        <p className="settings-note">{status || "加载中…"}</p>
-      </aside>
-    );
+    return <p className="settings-note">{status || "加载中…"}</p>;
   }
 
   const dirty =
@@ -57,8 +52,7 @@ export function SettingsPanel() {
   };
 
   return (
-    <aside className="settings-panel">
-      <div className="panel-title"><span className="eyebrow">RUNTIME SETTINGS</span><h2>运行配置</h2></div>
+    <div className="settings-panel">
       {FIELDS.map((field) => (
         <label key={field.key}>
           {field.label}
@@ -97,6 +91,6 @@ export function SettingsPanel() {
         <div>密钥不在此处修改，请用 <code>ts-team-kb config set-key</code>。</div>
         {status && <div className="settings-status">{status}</div>}
       </div>
-    </aside>
+    </div>
   );
 }
