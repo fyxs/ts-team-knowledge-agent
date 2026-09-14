@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from ts_knowledge_agent.agent.anthropic import AnthropicProvider
 from ts_knowledge_agent.agent.prompt import SYSTEM_PROMPT_VERSION, build_system_prompt
 from ts_knowledge_agent.agent.provider_types import Provider, ProviderReply
+from ts_knowledge_agent.agent.secrets import read_api_key
 from ts_knowledge_agent.agent.skills import Skill, load_skills
 from ts_knowledge_agent.agent.tools import dispatch_tool
 from ts_knowledge_agent.config import Settings
@@ -21,6 +22,7 @@ __all__ = [
     "OpenAICompatibleProvider",
     "Provider",
     "ProviderReply",
+    "create_provider",
     "create_provider_from_env",
     "run_agent",
 ]
@@ -76,6 +78,24 @@ class OpenAICompatibleProvider:
                 arguments = {}
             calls.append({"id": call.get("id") or "call_0", "name": (call.get("function") or {}).get("name") or "", "arguments": arguments})
         return ProviderReply(content=message.get("content") or "", tool_calls=calls)
+
+
+def create_provider(settings: Settings) -> Provider | None:
+    """按“环境变量优先、配置文件其次”的顺序解析模型配置；密钥来自环境变量或本地密钥文件。"""
+
+    provider_name = (os.getenv("TS_TEAM_KB_MODEL_PROVIDER") or settings.model_provider or "").strip().lower()
+    base_url = (os.getenv("TS_TEAM_KB_MODEL_BASE_URL") or settings.model_base_url or "").strip()
+    model = (os.getenv("TS_TEAM_KB_MODEL_NAME") or settings.model_name or "").strip()
+    max_tokens = int(os.getenv("TS_TEAM_KB_MODEL_MAX_TOKENS") or settings.model_max_tokens or 4096)
+    api_key = (os.getenv("TS_TEAM_KB_MODEL_API_KEY") or read_api_key(settings.working_directory)).strip()
+
+    if provider_name in {"anthropic", "claude"} or (not provider_name and "anthropic" in base_url):
+        if not (api_key and model):
+            return None
+        return AnthropicProvider(api_key=api_key, model=model, base_url=base_url, max_tokens=max_tokens)
+    if not (base_url and api_key and model):
+        return None
+    return OpenAICompatibleProvider(base_url, api_key, model)
 
 
 def create_provider_from_env() -> Provider | None:

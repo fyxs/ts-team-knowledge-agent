@@ -32,6 +32,10 @@ class Settings:
     shared_knowledge_repository_url: str = DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL
     mineru_python: Path | None = None
     sync_on_schedule: bool = True
+    model_provider: str = ""
+    model_name: str = ""
+    model_base_url: str = ""
+    model_max_tokens: int = 4096
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -58,6 +62,10 @@ class Settings:
             shared_knowledge_repository_url=str(data.get("shared_knowledge_repository_url", DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)).strip() or DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL,
             mineru_python=Path(data["mineru_python"]).expanduser() if str(data.get("mineru_python", "")).strip() else None,
             sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
+            model_provider=str(data.get("model_provider", "")).strip(),
+            model_name=str(data.get("model_name", "")).strip(),
+            model_base_url=str(data.get("model_base_url", "")).strip(),
+            model_max_tokens=int(data.get("model_max_tokens", 4096) or 4096),
         )
 
     def write_file(self, path: Path) -> None:
@@ -71,6 +79,10 @@ class Settings:
             "shared_knowledge_repository_url": self.shared_knowledge_repository_url,
             "mineru_python": str(self.mineru_python) if self.mineru_python else "",
             "sync_on_schedule": self.sync_on_schedule,
+            "model_provider": self.model_provider,
+            "model_name": self.model_name,
+            "model_base_url": self.model_base_url,
+            "model_max_tokens": self.model_max_tokens,
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

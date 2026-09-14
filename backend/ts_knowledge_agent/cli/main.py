@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import getpass
+import os
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
-from ts_knowledge_agent.agent.runtime import create_provider_from_env, run_agent
+from ts_knowledge_agent.agent.runtime import create_provider, run_agent
+from ts_knowledge_agent.agent.secrets import mask_secret, read_api_key, secret_path, write_api_key
 from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, Settings, initialize_working_directory
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.schemas import write_schema_files
@@ -60,6 +64,15 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--limit", type=int, default=200)
 
     ask = sub.add_parser("ask"); ask.add_argument("question"); ask.add_argument("--max-steps", type=int, default=6)
+    config = sub.add_parser("config")
+    config_sub = config.add_subparsers(dest="config_action")
+    config_sub.add_parser("show")
+    config_set = config_sub.add_parser("set")
+    config_set.add_argument("--provider")
+    config_set.add_argument("--model")
+    config_set.add_argument("--base-url")
+    config_set.add_argument("--max-tokens", type=int)
+    config_sub.add_parser("set-key")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -154,7 +167,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_scheduler(settings)
 
     if args.command == "ask":
-        provider = create_provider_from_env()
+        provider = create_provider(settings)
         if provider is None:
             print(
                 "model provider not configured; set TS_TEAM_KB_MODEL_PROVIDER (openai|anthropic), "
@@ -164,6 +177,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_agent(settings, args.question, provider, max_steps=args.max_steps)
         print(json.dumps({"answer": result.answer, "citations": result.citations, "steps": result.steps, "error": result.error, "prompt_version": result.prompt_version}, ensure_ascii=False, indent=2))
         return 1 if result.error else 0
+    if args.command == "config":
+        config_path = Path(os.getenv("TS_KB_CONFIG", str(settings.working_directory / "ts-kb.json")))
+        action = getattr(args, "config_action", None)
+        if action == "show":
+            print(json.dumps({
+                "config_path": str(config_path),
+                "config_exists": config_path.is_file(),
+                "provider": settings.model_provider or "(unset, defaults to openai-compatible)",
+                "model": settings.model_name or "(unset)",
+                "base_url": settings.model_base_url or "(provider default)",
+                "max_tokens": settings.model_max_tokens,
+                "api_key": mask_secret(read_api_key(settings.working_directory)),
+                "api_key_path": str(secret_path(settings.working_directory)),
+                "env_overrides": {name: True for name in (
+                    "TS_TEAM_KB_MODEL_PROVIDER", "TS_TEAM_KB_MODEL_NAME",
+                    "TS_TEAM_KB_MODEL_BASE_URL", "TS_TEAM_KB_MODEL_API_KEY",
+                    "TS_TEAM_KB_MODEL_MAX_TOKENS") if os.getenv(name)},
+            }, ensure_ascii=False, indent=2))
+            return 0
+        if action == "set":
+            updates = {}
+            if args.provider: updates["model_provider"] = args.provider.strip().lower()
+            if args.model: updates["model_name"] = args.model.strip()
+            if args.base_url is not None: updates["model_base_url"] = args.base_url.strip()
+            if args.max_tokens: updates["model_max_tokens"] = int(args.max_tokens)
+            if not updates:
+                parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens")
+            if not config_path.is_file():
+                parser.error(f"configuration file not found: {config_path}; run ts-team-kb init first")
+            replace(settings, **updates).write_file(config_path)
+            print(json.dumps({"updated": updates, "config_path": str(config_path)}, ensure_ascii=False, indent=2))
+            return 0
+        if action == "set-key":
+            api_key = getpass.getpass("model API key (input hidden): ").strip()
+            if not api_key:
+                print("empty input, nothing written")
+                return 2
+            path = write_api_key(settings.working_directory, api_key)
+            print(f"api key stored at {path} (never commit this file)")
+            return 0
+        parser.error("config requires an action: show | set | set-key")
     if args.command == "schemas":
         for path in write_schema_files(args.output):
             print(path)
