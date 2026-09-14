@@ -4,11 +4,13 @@ import argparse
 import getpass
 import os
 import json
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
 from ts_knowledge_agent.agent.runtime import create_provider, run_agent
+from ts_knowledge_agent.agent.setup import configure_model_interactively
 from ts_knowledge_agent.agent.secrets import mask_secret, read_api_key, secret_path, write_api_key
 from ts_knowledge_agent.config import DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL, Settings, initialize_working_directory
 from ts_knowledge_agent.repositories.state_store import StateStore
@@ -32,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--shared-source-directory", required=True, type=Path)
     init.add_argument("--scan-interval-minutes", type=int, default=60)
     init.add_argument("--shared-knowledge-repository-url", default=DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)
+    init.add_argument("--skip-model-setup", action="store_true")
 
     sub.add_parser("status")
 
@@ -116,6 +119,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"initialized working_directory={settings.working_directory} personal_workspace={settings.personal_workspace} "
             f"shared_knowledge_repository_directory={settings.shared_knowledge_repository_directory}"
         )
+        config_path = settings.working_directory / "ts-kb.json"
+        if args.skip_model_setup or not sys.stdin.isatty():
+            print("model setup skipped; run ts-team-kb config set / config set-key later")
+        else:
+            configure_model_interactively(settings).write_file(config_path)
         return 0
 
     settings = Settings.from_env()

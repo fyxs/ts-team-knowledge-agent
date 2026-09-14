@@ -129,11 +129,21 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
     ]
     citations: list[str] = []
     for step in range(1, max_steps + 1):
-        reply = provider.chat(list(transcript), [])
+        reply = provider.chat(list(transcript), TOOL_SCHEMAS)
         if reply.error:
             return AgentResult(answer="", citations=_unique(citations), steps=step, error=reply.error, transcript=transcript)
         if not reply.tool_calls:
-            return AgentResult(answer=reply.content.strip(), citations=_unique(citations), steps=step, transcript=transcript)
+            content = (reply.content or "").strip()
+            markup = _tool_markup_marker(content)
+            if markup:
+                return AgentResult(
+                    answer=content,
+                    citations=_unique(citations),
+                    steps=step,
+                    error=f"provider returned tool markup as text ({markup}); tools were not honored",
+                    transcript=transcript,
+                )
+            return AgentResult(answer=content, citations=_unique(citations), steps=step, transcript=transcript)
         transcript.append({
             "role": "assistant",
             "content": reply.content or "",
@@ -176,3 +186,14 @@ def _unique(values: list[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+TOOL_MARKUP_MARKERS = ("<||DSML||", "</||DSML||", "<tool_call", "</tool_call", "<function_call")
+
+
+def _tool_markup_marker(content: str) -> str | None:
+    """模型把工具调用当作文本输出时返回命中的标记，否则返回 None。"""
+
+    for marker in TOOL_MARKUP_MARKERS:
+        if marker in content:
+            return marker
+    return None
