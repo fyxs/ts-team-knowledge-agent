@@ -206,6 +206,7 @@ def trigger_run(request: RunRequest | None = None) -> dict:
                 "scanned": summary.scanned,
                 "queued": summary.queued,
                 "converted": summary.converted,
+                "warned": summary.warned,
                 "skipped": summary.skipped,
                 "failed": summary.failed,
                 "indexed": summary.indexed,

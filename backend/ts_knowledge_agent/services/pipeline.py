@@ -30,6 +30,7 @@ class RunSummary:
     queued:int=0
     batches:int=0
     converted:int=0
+    warned:int=0
     skipped:int=0
     failed:int=0
     missing:int=0
@@ -48,7 +49,7 @@ def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=
 
 def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
     state=StateStore(settings.shared_knowledge_repository_directory/"data"/"state.sqlite3")
-    converted=skipped=failed=0; reason_counts:dict[str,int]={}
+    converted=warned=skipped=failed=0; reason_counts:dict[str,int]={}
     try:
         recovered=state.recover_stale_processing()
         if recovered: reason_counts["stale_processing_recovered"]=recovered
@@ -78,9 +79,13 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
                     quality = inspect_markdown_file(result.output_path)
-                    if not quality.ok:
-                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"quality_failed","; ".join(quality.errors),reason="quality_failed")
+                    warning_message = None if quality.ok else "; ".join(quality.errors)
+                    if warning_message and not result.from_source:
+                        # 工具产物质量问题：可能由转换引入，隔离出共享仓库，不入库
+                        quarantine_document(settings.working_directory, settings.shared_knowledge_repository_directory, result.output_path.parent)
+                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"quality_failed",warning_message,reason="quality_failed")
                         state.update_source_status(source.relative_path,"quality_failed")
+                        reason_counts["quality_failed"]=reason_counts.get("quality_failed",0)+1
                         failed += 1
                         continue
                     secret = scan_markdown_file(result.output_path)
@@ -107,9 +112,30 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                         reason_counts["blocked_secret"]=reason_counts.get("blocked_secret",0)+1
                         failed += 1
                         continue
-                    state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"converted",reason=reason)
-                    state.update_source_status(source.relative_path,"converted")
-                    converted+=1
+                    status = "quality_warned" if warning_message else "converted"
+                    state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,status,reason=reason,warning_message=warning_message)
+                    state.update_source_status(source.relative_path,status)
+                    if warning_message:
+                        warned+=1
+                        reason_counts["source_quality_warning"]=reason_counts.get("source_quality_warning",0)+1
+                        if not has_open_feedback(settings.working_directory, source.sha256, "source_quality_warning"):
+                            append_feedback(settings.working_directory, FeedbackRecord(
+                                source_relative_path=source.relative_path,
+                                source_sha256=source.sha256,
+                                file_type=source.absolute_path.suffix.lower(),
+                                converter="source-copy",
+                                converter_version=CONVERTER_VERSION,
+                                output_path=str(result.output_path),
+                                category="source_quality_warning",
+                                description=warning_message,
+                                expected="源文件自带的质量问题不影响入库；请修源文件后重扫，或确认可接受并关闭该记录",
+                                source_issue=True,
+                                adapter_issue=False,
+                                resolution="open",
+                                review_status="open",
+                            ))
+                    else:
+                        converted+=1
                 except Exception as exc:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc),reason=reason)
                     state.update_source_status(source.relative_path,"failed_retryable")
@@ -124,5 +150,5 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         if sync:
             if reason_counts.get("blocked_secret"): sync_status="blocked_secret"
             else: sync_status=sync_repository(settings.shared_knowledge_repository_directory,"Sync knowledge from conversion run").status
-        return RunSummary(len(sources),len(pending),len(batches),converted,skipped,failed,missing,indexed,sync_status=sync_status,reason_counts=reason_counts)
+        return RunSummary(scanned=len(sources),queued=len(pending),batches=len(batches),converted=converted,warned=warned,skipped=skipped,failed=failed,missing=missing,indexed=indexed,sync_status=sync_status,reason_counts=reason_counts)
     finally: state.close()

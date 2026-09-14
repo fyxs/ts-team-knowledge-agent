@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.repositories.search_store import SearchStore
-from ts_knowledge_agent.repositories.state_store import StateStore
+from ts_knowledge_agent.repositories.state_store import SUCCESS_STATUSES, WARNING_STATUSES, StateStore
 
 SNIPPET_WIDTH = 80
 
@@ -136,7 +136,12 @@ def knowledge_status(settings: Settings) -> dict[str, object]:
         failures = [
             {"path": row["relative_path"], "status": row["status"], "error": (row["error_message"] or "")[:400]}
             for row in store.list_conversions()
-            if row["status"] != "converted"
+            if row["status"] not in SUCCESS_STATUSES
+        ]
+        warnings = [
+            {"path": row["relative_path"], "status": row["status"], "warning": (row["warning_message"] or "")[:400]}
+            for row in store.list_conversions()
+            if row["status"] in WARNING_STATUSES
         ]
         return {
             "personal_workspace": settings.personal_workspace,
@@ -144,6 +149,8 @@ def knowledge_status(settings: Settings) -> dict[str, object]:
             "total_sources": sum(source_counts.values()),
             "open_issues": len(failures),
             "failures": failures,
+            "open_warnings": len(warnings),
+            "warnings": warnings,
         }
     finally:
         store.close()

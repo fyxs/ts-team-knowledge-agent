@@ -16,7 +16,7 @@ class SourceRegistration(BaseModel):
     knowledge_path: str = Field(description="知识仓内相对路径（POSIX 分隔符），无法确定时为空字符串")
     converter: str = Field(description="转换器名称")
     converter_version: str = Field(description="转换器版本")
-    status: str = Field(description="converted / quality_failed / blocked_secret / failed_retryable 等")
+    status: str = Field(description="converted / quality_warned / quality_failed / blocked_secret / failed_retryable 等")
     converted_at: str = Field(description="该记录最后更新时间（UTC）")
 
 

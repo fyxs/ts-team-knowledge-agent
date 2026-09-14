@@ -15,11 +15,23 @@ class Converter(Protocol):
     def convert(self, source: Path) -> str: ...
 def is_supported(source: Path) -> bool: return source.suffix.lower() in SUPPORTED_EXTENSIONS
 def is_direct_copy(source: Path) -> bool: return source.suffix.lower() in SUPPORTED_DIRECT_COPY_EXTENSIONS
+ORIGIN_SOURCE = "source"
+"""输出内容来自源文件本身（直复制、文本重解码）；质量问题只可能来自源文件。"""
+
+ORIGIN_TOOL = "tool"
+"""输出由转换工具生成（MinerU、Excel 适配器或注入的转换器）；质量问题可能由转换引入。"""
+
+
 @dataclass(frozen=True)
 class ConversionResult:
     source_path: Path
     output_path: Path
     bytes_written: int
+    origin: str = ORIGIN_TOOL
+
+    @property
+    def from_source(self) -> bool:
+        return self.origin == ORIGIN_SOURCE
 
 def _decode_text(source: Path) -> str:
     raw = source.read_bytes()
@@ -38,9 +50,15 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
     if source == output: raise ValueError("conversion output must not overwrite the source file")
     if not is_supported(source): raise ValueError(f"unsupported source format: {source.suffix or '<no extension>'}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    if converter is not None: output.write_text(converter.convert(source), encoding="utf-8")
-    elif is_direct_copy(source): shutil.copy2(source, output)
-    elif source.suffix.lower() == ".txt": output.write_text(_decode_text(source), encoding="utf-8")
-    elif source.suffix.lower() == ".xlsx": convert_excel(source, output)
-    else: MinerUConverter(mineru_python).convert_to(source, output)
-    return ConversionResult(source, output, output.stat().st_size)
+    extension = source.suffix.lower()
+    if converter is not None:
+        output.write_text(converter.convert(source), encoding="utf-8"); origin = ORIGIN_TOOL
+    elif is_direct_copy(source):
+        shutil.copy2(source, output); origin = ORIGIN_SOURCE
+    elif extension == ".txt":
+        output.write_text(_decode_text(source), encoding="utf-8"); origin = ORIGIN_SOURCE
+    elif extension == ".xlsx":
+        convert_excel(source, output); origin = ORIGIN_TOOL
+    else:
+        MinerUConverter(mineru_python).convert_to(source, output); origin = ORIGIN_TOOL
+    return ConversionResult(source, output, output.stat().st_size, origin)
