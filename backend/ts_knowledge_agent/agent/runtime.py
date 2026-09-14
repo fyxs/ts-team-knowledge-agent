@@ -10,7 +10,7 @@ from ts_knowledge_agent.agent.prompt import SYSTEM_PROMPT_VERSION, build_system_
 from ts_knowledge_agent.agent.provider_types import Provider, ProviderReply
 from ts_knowledge_agent.agent.secrets import read_api_key
 from ts_knowledge_agent.agent.skills import Skill, load_skills
-from ts_knowledge_agent.agent.tools import dispatch_tool
+from ts_knowledge_agent.agent.tools import TOOL_SCHEMAS, dispatch_tool
 from ts_knowledge_agent.config import Settings
 
 DEFAULT_MAX_STEPS = 6
