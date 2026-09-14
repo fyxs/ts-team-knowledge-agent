@@ -1,29 +1,59 @@
-# 日志系统设计 V1
+# 日志与运行记录
 
 ## 结论
 
-需要日志，但一期不需要独立日志平台。每小时任务、失败重试、删除检测和 Git 同步都必须可追踪。
+需要记录，但不需要独立日志平台。所有轮次、失败与同步都必须可追踪。
 
 ## 三种记录分工
 
-- **运行日志**：本地 `logs/app.jsonl`，记录扫描、转换、提炼、索引和同步的事件、耗时、错误和诊断。
-- **SQLite**：本机任务状态、输入输出、哈希、重试、源文件缺失、成员空间删除和索引状态。
-- **Git 历史**：团队知识内容、来源登记和知识演进，不承担运行日志。
+| 载体 | 内容 | 是否入 Git |
+| --- | --- | --- |
+| `logs/runs.jsonl`（工作目录） | 每轮运行的摘要记录 | 否 |
+| `state.sqlite3` | 源文件状态、转换状态与原因、索引 | 否 |
+| Git 历史 | 知识内容、来源登记、审查记录 | 是 |
 
-## 每小时运行记录
+## 每轮运行记录
 
-每次小时任务有唯一 `run_id`，至少记录：开始/结束时间、扫描范围、发现数量、新增/修改/缺失数量、转换成功/失败数量、提炼数量、索引数量、Git 变更数量、push 结果和远程 SHA。
+每次 `run-once` 追加一行 JSON：
 
-事件类型包括：`hourly_run_started`、`scan_completed`、`file_discovered`、`file_changed`、`source_missing`、`conversion_started`、`conversion_succeeded`、`conversion_failed`、`extraction_succeeded`、`index_updated`、`git_pull`、`git_conflict`、`git_commit`、`git_push`、`deletion_detected`、`run_completed`。
+```json
+{"started_at": "…", "finished_at": "…", "duration_seconds": 760.6,
+ "scanned": 93, "queued": 4, "batches": 1, "converted": 3, "skipped": 89,
+ "failed": 1, "missing": 0, "indexed": 100, "sync_status": "pushed",
+ "reason_counts": {"unchanged": 81, "unsupported": 8, "previous_failed": 1},
+ "error": null}
+```
 
-## 自动同步保护
+关键字段含义：
 
-以下情况记录并暂停 push：冲突、异常大量删除、转换输出为空或异常缩短、疑似敏感信息、关键规则文件变更或处理失败。正常任务可在小时批次中自动 commit/push。
+```text
+reason_counts   本轮每类决策的数量：
+                new_source / source_changed / output_missing / previous_failed /
+                unchanged / unsupported / stale_processing_recovered
+sync_status     disabled / clean / pushed / push_failed / blocked_conflict /
+                blocked_secret / not_initialized
+error           异常摘要（正常为 null）
+```
+
+## 状态与原因
+
+`state.sqlite3` 中每个源文件记录：相对路径、大小、修改时间、SHA-256、状态；每次转换记录转换器与版本、输出路径、状态、错误信息与原因。
+
+```text
+源状态     discovered / converted / quality_failed / trusted?（不使用）/
+           failed_retryable / blocked_secret / ignored / source_missing
+判断依据   源哈希变化 → source_changed；输出缺失 → output_missing；
+           上次失败 → previous_failed；未变化 → unchanged
+```
+
+## 同步保护
+
+以下情况不推送并留痕：远端有新提交且 rebase 冲突、命中凭据、质量门禁拦截。
 
 ## 安全
 
-不记录文件正文、模型密钥、Token、密码、Cookie、完整 prompt/response。路径可按配置脱敏。默认保留运行日志 30 天；SQLite 保留满足任务恢复和来源追踪所需的摘要。
+不记录文件正文、模型密钥、Token、密码、Cookie、完整提示词与响应。日志与数据库不进入团队知识仓。
 
 ## 不做
 
-一期不接入 ELK、Loki、云日志平台或复杂监控大盘；日志不提交团队知识仓，也不替代来源、验证记录和 Git 历史。
+一期不接入 ELK、Loki 或云日志平台；不把运行日志提交到知识仓，也不以日志替代来源登记、审查记录和 Git 历史。
