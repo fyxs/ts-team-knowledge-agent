@@ -58,3 +58,49 @@ def commit_and_push(repo: Path, message: str) -> SyncResult:
     except GitSyncError as exc:
         return SyncResult("push_failed", commit=commit, message=str(exc))
     return SyncResult("pushed", commit=commit)
+
+def sync_repository(repo: Path, message: str) -> SyncResult:
+    """Commit local member knowledge, rebase on remote changes and push.
+
+    Returns explicit statuses so callers can report without guessing:
+    pushed, clean, not_initialized, blocked_conflict, push_failed.
+    """
+    repo = repo.expanduser().resolve()
+    if not (repo / ".git").exists():
+        return SyncResult("not_initialized", message=str(repo))
+    try:
+        if _git(repo, "status", "--porcelain"):
+            _git(repo, "add", "members")
+            if _git(repo, "diff", "--cached", "--name-only"):
+                _git(repo, "commit", "-m", message)
+        _git(repo, "fetch", "origin")
+    except GitSyncError as exc:
+        return SyncResult("push_failed", message=str(exc))
+
+    branch = _git(repo, "branch", "--show-current") or "main"
+    try:
+        behind = _git(repo, "rev-list", "--count", f"HEAD..origin/{branch}")
+    except GitSyncError:
+        behind = "0"
+    if behind != "0":
+        try:
+            _git(repo, "rebase", f"origin/{branch}")
+        except GitSyncError as exc:
+            try:
+                _git(repo, "rebase", "--abort")
+            except GitSyncError:
+                pass
+            return SyncResult("blocked_conflict", message=str(exc))
+
+    try:
+        ahead = _git(repo, "rev-list", "--count", f"origin/{branch}..HEAD")
+    except GitSyncError:
+        ahead = "1"
+    commit = _git(repo, "rev-parse", "HEAD")
+    if ahead == "0":
+        return SyncResult("clean", commit=commit)
+    try:
+        _git(repo, "push", "origin", f"HEAD:refs/heads/{branch}")
+    except GitSyncError as exc:
+        return SyncResult("push_failed", commit=commit, message=str(exc))
+    return SyncResult("pushed", commit=commit)

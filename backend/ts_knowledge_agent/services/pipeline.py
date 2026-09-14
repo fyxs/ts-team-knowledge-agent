@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Callable
 from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.repositories.state_store import StateStore
+from ts_knowledge_agent.adapters.git_sync import sync_repository
+from ts_knowledge_agent.services.secret_scan import quarantine_document, scan_markdown_file
 from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_file
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
@@ -73,6 +75,14 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                         state.update_source_status(source.relative_path,"quality_failed")
                         failed += 1
                         continue
+                    secret = scan_markdown_file(result.output_path)
+                    if not secret.ok:
+                        quarantine_document(settings.working_directory, settings.shared_knowledge_repository_directory, result.output_path.parent)
+                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"blocked_secret",secret.summary(),reason="blocked_secret")
+                        state.update_source_status(source.relative_path,"blocked_secret")
+                        reason_counts["blocked_secret"]=reason_counts.get("blocked_secret",0)+1
+                        failed += 1
+                        continue
                     state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"converted",reason=reason)
                     state.update_source_status(source.relative_path,"converted")
                     converted+=1
@@ -83,5 +93,9 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)
         missing=state.mark_missing_sources(seen)
         indexed=index_converted(settings)
-        return RunSummary(len(sources),len(pending),len(batches),converted,skipped,failed,missing,indexed,reason_counts=reason_counts)
+        sync_status="disabled"
+        if sync:
+            if reason_counts.get("blocked_secret"): sync_status="blocked_secret"
+            else: sync_status=sync_repository(settings.shared_knowledge_repository_directory,"Sync knowledge from conversion run").status
+        return RunSummary(len(sources),len(pending),len(batches),converted,skipped,failed,missing,indexed,sync_status=sync_status,reason_counts=reason_counts)
     finally: state.close()
