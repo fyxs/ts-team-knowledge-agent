@@ -40,7 +40,18 @@
 
 ## 设计体系
 
-`src/tokens.css` 来源：从参考项目 `D:\2Work\OpenProjects\chatbot` 抽取的设计体系
+视觉与交互的**唯一来源是仓库内的 `design/`**，入口是 `design/README.md`：
+
+| 位置 | 角色 |
+| --- | --- |
+| `design/tokens.css` | 标准 token 定义源（来自设计体系，命名不得改动） |
+| `design/DESIGN.md`、`design/preview/` | 设计说明与颜色/字体/间距/组件预览 |
+| `frontend/src/tokens.css` | 运行时副本 = 标准 token + 本项目扩展 token |
+| `frontend/src/styles.css` | 应用样式，只允许引用 token |
+
+改动界面前先读 `design/README.md`，其中列出硬规则与改动自检清单。
+
+提取来源（参考项目 `D:\2Work\OpenProjects\chatbot`）：
 
 ```
 C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\design-systems\chatbot
@@ -48,9 +59,9 @@ C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\de
 
 约定：
 
-- `tokens.css` 是该设计体系的唯一来源，**不重命名 OD 标准 token**；
-- 应用样式只允许引用 token，不硬编码颜色、圆角、间距；
-- 需要新视觉值时应先在 `tokens.css` 增加 token，再在 `styles.css` 使用。
+- **不重命名标准 token**；标准 token 集合由 `tests/test_design_tokens.py` 校验，漏改或改名会失败；
+- 应用样式只允许引用 token，不硬编码颜色、圆角、间距（同一测试拦截 `#hex` / `rgb()` / `hsl()`）；
+- 需要新视觉值时，先在 `frontend/src/tokens.css` 的应用扩展区块新增，再登记到本文件的扩展表。
 
 应用扩展 token（源设计体系未定义，已在 `tokens.css` 中单独标注）：
 
