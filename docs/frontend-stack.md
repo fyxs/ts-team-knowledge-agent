@@ -58,3 +58,6 @@ C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\de
 | --- | --- |
 | `--overlay` | 弹窗遮罩，随主题变化 |
 | `--content-max` | 主区域内容宽度阶梯：默认 896px（设计体系 `container-max`），≥1600px 为 1080px，≥1920px 为 1200px |
+| `--session-panel-w` | 历史会话列宽度（264px） |
+| `--content-max-sessions` | 含会话列时的主区域上限（1180px）。宽屏下与 `--content-max` 取较大值，使消息列维持接近原来的阅读宽度 |
+| `--elev-float` | 浮层阴影：会话列抽屉、弹窗等脱离文档流的表面 |

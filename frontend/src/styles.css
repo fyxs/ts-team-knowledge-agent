@@ -73,6 +73,40 @@ body{
 .chat-heading h1{margin:var(--space-2) 0 0;font-size:var(--text-lg);font-weight:600;letter-spacing:var(--tracking-display);line-height:var(--leading-tight)}
 .model-chip{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);border:1px solid var(--border);border-radius:var(--radius-pill);padding:var(--space-1) var(--space-3);white-space:nowrap}
 
+/* ---------- 历史会话面板 ---------- */
+/* 与 chat-panel 同一种卡片语言：surface 底 + 1px 边框 + radius-lg + elev-raised，
+   层级由边框表达，阴影只补接触感。 */
+.session-panel{display:flex;flex-direction:column;min-height:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-raised);overflow:hidden}
+.session-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-4);border-bottom:1px solid var(--border)}
+.session-head-title{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:600;letter-spacing:var(--tracking-display);color:var(--meta);text-transform:uppercase}
+.session-new{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);color:var(--fg);padding:var(--space-1) var(--space-3);font:inherit;font-size:var(--text-xs);cursor:pointer;white-space:nowrap;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
+.session-new:hover{background:var(--accent-hover);border-color:var(--border-soft)}
+.session-new:active{background:var(--accent-active)}
+.session-new:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.session-search{padding:var(--space-3) var(--space-4) 0}
+.session-search input{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);color:var(--fg);font:inherit;font-size:var(--text-xs)}
+.session-search input::placeholder{color:var(--meta)}
+.session-search input:focus-visible{outline:none;box-shadow:var(--focus-ring);border-color:var(--border-soft)}
+.session-list{flex:1;min-height:0;overflow-y:auto;padding:var(--space-2) var(--space-2) var(--space-3)}
+.session-empty{margin:var(--space-4) var(--space-2);color:var(--meta);font-size:var(--text-xs)}
+.session-group{margin:var(--space-3) var(--space-2) var(--space-1);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);letter-spacing:.04em}
+.session-group:first-child{margin-top:var(--space-2)}
+.session-item{display:block;width:100%;text-align:left;padding:var(--space-2) var(--space-3);border:0;border-radius:var(--radius-md);background:transparent;color:inherit;font:inherit;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard)}
+.session-item:hover{background:var(--accent-hover)}
+.session-item:active{background:var(--accent-active)}
+.session-item:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.session-title{display:block;font-size:var(--text-sm);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-meta{display:block;margin-top:2px;font-family:var(--font-mono);font-size:var(--text-xs);line-height:1.4;color:var(--meta)}
+.session-item[aria-current="true"]{background:var(--accent)}
+.session-item[aria-current="true"] .session-title{color:var(--accent-on);font-weight:600}
+.session-item[aria-current="true"] .session-meta{color:var(--fg-2)}
+.session-item[aria-current="true"]:hover{background:var(--accent-hover)}
+.session-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+
+/* 会话列只在窄屏折叠为抽屉，由顶栏按钮唤出 */
+.session-toggle{display:none}
+.session-overlay{display:none}
+
 .messages{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
 
 .message{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);background:var(--surface)}
@@ -160,6 +194,22 @@ body{
 .settings-note code{font-family:var(--font-mono);font-size:var(--text-xs);background:var(--surface-warm);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px 5px;color:var(--fg)}
 .settings-status{margin-top:var(--space-2);color:var(--fg-2)}
 
+/* ---------- 会话列断点 ---------- */
+/* 宽屏：会话列与对话面板并排；主区域放宽以容纳两列，取两档中的较大值，
+   使消息列维持在接近原来的阅读宽度。 */
+@media (min-width:940px){
+  .app-shell{max-width:max(var(--content-max),var(--content-max-sessions))}
+}
+
+/* 窄屏：会话列折叠为抽屉，由顶栏「历史会话」按钮唤出 */
+@media (max-width:939px){
+  .chat-layout{grid-template-columns:minmax(0,1fr)}
+  .session-toggle{display:inline-flex}
+  .session-panel{position:fixed;top:0;bottom:0;left:0;z-index:60;width:min(var(--session-panel-w),82%);border-radius:0 var(--radius-lg) var(--radius-lg) 0;box-shadow:var(--elev-float);transform:translateX(-100%);transition:transform var(--motion-base) var(--ease-standard)}
+  .app-shell.sessions-open .session-panel{transform:none}
+  .app-shell.sessions-open .session-overlay{display:block;position:fixed;inset:0;z-index:55;background:var(--overlay)}
+}
+
 /* ---------- 窄屏 ---------- */
 @media (max-width:720px){
   .app-shell{padding:var(--space-4) var(--container-gutter-phone)}
@@ -180,8 +230,9 @@ body{
 .settings-actions button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* ---------- 滚动条：默认隐藏，悬浮时才出现 ---------- */
-/* 覆盖所有可滚动区域：消息列表、弹窗、代码块、宽表格 */
+/* 覆盖所有可滚动区域：消息列表、会话列表、弹窗、代码块、宽表格 */
 .messages,
+.session-list,
 .modal-body,
 .markdown-body pre,
 .table-scroll {
@@ -189,6 +240,7 @@ body{
   scrollbar-color: transparent transparent;
 }
 .messages:hover,
+.session-list:hover,
 .modal-body:hover,
 .markdown-body pre:hover,
 .table-scroll:hover {
@@ -197,6 +249,7 @@ body{
 
 /* Chromium / WebKit：轨道透明，滑块细且带内缩 */
 .messages::-webkit-scrollbar,
+.session-list::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar,
 .markdown-body pre::-webkit-scrollbar,
 .table-scroll::-webkit-scrollbar {
@@ -204,12 +257,14 @@ body{
   height: 10px;
 }
 .messages::-webkit-scrollbar-track,
+.session-list::-webkit-scrollbar-track,
 .modal-body::-webkit-scrollbar-track,
 .markdown-body pre::-webkit-scrollbar-track,
 .table-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 .messages::-webkit-scrollbar-thumb,
+.session-list::-webkit-scrollbar-thumb,
 .modal-body::-webkit-scrollbar-thumb,
 .markdown-body pre::-webkit-scrollbar-thumb,
 .table-scroll::-webkit-scrollbar-thumb {
@@ -219,12 +274,14 @@ body{
   background-clip: content-box;
 }
 .messages:hover::-webkit-scrollbar-thumb,
+.session-list:hover::-webkit-scrollbar-thumb,
 .modal-body:hover::-webkit-scrollbar-thumb,
 .markdown-body pre:hover::-webkit-scrollbar-thumb,
 .table-scroll:hover::-webkit-scrollbar-thumb {
   background-color: color-mix(in oklab, var(--fg) 20%, transparent);
 }
 .messages::-webkit-scrollbar-thumb:hover,
+.session-list::-webkit-scrollbar-thumb:hover,
 .modal-body::-webkit-scrollbar-thumb:hover,
 .markdown-body pre::-webkit-scrollbar-thumb:hover,
 .table-scroll::-webkit-scrollbar-thumb:hover {

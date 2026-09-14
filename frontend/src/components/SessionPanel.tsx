@@ -1,4 +1,4 @@
-import { formatSessionTime, type SessionGroup } from "../data/sessions";
+import type { SessionGroup } from "../hooks/useSessions";
 
 type Props = {
   groups: SessionGroup[];
@@ -47,7 +47,7 @@ export function SessionPanel({ groups, total, activeId, query, onQueryChange, on
                 onClick={() => onSelect(session.id)}
               >
                 <span className="session-title">{session.title}</span>
-                <span className="session-meta">{formatSessionTime(session.updatedAt)}</span>
+                <span className="session-meta">{session.timeLabel}</span>
               </button>
             ))}
           </div>

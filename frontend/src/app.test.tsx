@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "./App";
+import { SESSIONS_SEED } from "./api/sessions";
 
 // React 18 在测试环境需要显式声明，否则状态更新不会同步刷新。
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -333,5 +334,128 @@ describe("agent chat shell", () => {
     });
     await flush();
     expect(container?.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("renders the session panel with the static history", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    expect(container?.querySelector(".session-panel")).not.toBeNull();
+    expect(container?.querySelector(".session-head-title")?.textContent).toBe("历史会话");
+    expect(container?.querySelectorAll(".session-item").length).toBe(SESSIONS_SEED.length);
+    expect(container?.querySelector(".session-item[aria-current='true']")?.textContent).toContain(
+      SESSIONS_SEED[0].title,
+    );
+    // 最近活动的会话落在「今天」分组
+    expect(container?.querySelector(".session-group")?.textContent).toBe("今天");
+    // 会话内容接口尚未实现，选中会话从空状态开始
+    expect(container?.textContent).toContain("向团队知识库提问");
+  });
+
+  it("filters the session list by keyword", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const search = container?.querySelector(".session-search input") as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(search, "MinerU");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container?.querySelectorAll(".session-item").length).toBe(1);
+    expect(container?.querySelector(".session-item")?.textContent).toContain("MinerU");
+  });
+
+  it("keeps each session's conversation separate", async () => {
+    stubFetch((url, init) => {
+      if (url.includes("/api/v1/chat/stream")) return sseResponse(UNRETRIEVED_STREAM);
+      return defaultHandler(url, init);
+    });
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const ask = async (question: string) => {
+      const textarea = container?.querySelector("textarea") as HTMLTextAreaElement;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(textarea, question);
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await flush();
+      await act(async () => {
+        (container?.querySelector(".composer button") as HTMLButtonElement).click();
+      });
+      await flush();
+      await flush();
+    };
+
+    await ask("第一条会话的问题");
+    expect(container?.textContent).toContain("第一条会话的问题");
+
+    const idle = Array.from(container?.querySelectorAll<HTMLButtonElement>(".session-item") ?? []).find(
+      (item) => item.getAttribute("aria-current") === "false",
+    );
+    await act(async () => {
+      idle?.click();
+    });
+    await flush();
+
+    // 换到没有消息的会话：消息区回到空状态，上一条会话的内容不再出现
+    expect(container?.textContent).not.toContain("第一条会话的问题");
+    expect(container?.textContent).toContain("向团队知识库提问");
+
+    // 切回原会话：提问仍在
+    const back = Array.from(container?.querySelectorAll<HTMLButtonElement>(".session-item") ?? []).find(
+      (item) => item.textContent?.includes(SESSIONS_SEED[0].title),
+    );
+    await act(async () => {
+      back?.click();
+    });
+    await flush();
+    expect(container?.textContent).toContain("第一条会话的问题");
+  });
+
+  it("creates a session and titles it from the first question", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    await act(async () => {
+      (container?.querySelector(".session-new") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const activeItem = () => container?.querySelector(".session-item[aria-current='true']");
+    expect(container?.querySelectorAll(".session-item").length).toBe(SESSIONS_SEED.length + 1);
+    expect(activeItem()?.textContent).toContain("新会话");
+    expect(container?.textContent).toContain("向团队知识库提问");
+
+    const textarea = container?.querySelector("textarea") as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(textarea, "环境变量怎么读");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".composer button") as HTMLButtonElement).click();
+    });
+    await flush();
+    await flush();
+
+    // 占位标题被首个问题替换
+    expect(activeItem()?.textContent).toContain("环境变量怎么读");
   });
 });
