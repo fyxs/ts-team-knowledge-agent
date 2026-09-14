@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 构建 | Vite | 开发态用 dev server，正式态用构建产物 |
 | 框架 | React 18 + TypeScript | 严格模式；类型检查纳入验证流程 |
-| 样式 | 原生 CSS + 设计变量 | 不做 CSS-in-JS；样式集中在 `src/styles.css` |
+| 样式 | 原生 CSS + 设计 token | token 见 `src/tokens.css`（来源见下），应用样式集中在 `src/styles.css` |
 | Markdown | react-markdown + remark-gfm | 渲染隔离在 `src/components/MarkdownView.tsx` |
 | 路由 | react-router-dom | 多页面（对话 / 设置 / 知识概览）时启用 |
 | 数据获取 | 自建 fetch 客户端 | 隔离在 `src/api/agent.ts` |
@@ -37,3 +37,17 @@
 ## 依赖纪律
 
 `package.json` 中不得保留未使用的依赖。引入新依赖前需要说明用途，并在本文件登记。
+
+## 设计体系
+
+`src/tokens.css` 来源：从参考项目 `D:\2Work\OpenProjects\chatbot` 抽取的设计体系
+
+```
+C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\design-systems\chatbot
+```
+
+约定：
+
+- `tokens.css` 是该设计体系的唯一来源，**不重命名 OD 标准 token**；
+- 应用样式只允许引用 token，不硬编码颜色、圆角、间距；
+- 需要新视觉值时应先在 `tokens.css` 增加 token，再在 `styles.css` 使用。
