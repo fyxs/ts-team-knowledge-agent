@@ -86,3 +86,14 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 - 验证失败必须如实报告，不得以部分成功替代完整成功。
 - 分支：`main` 为稳定分支；日常改动在 `dev`，验证通过后再合并。
 - 未经明确授权不执行 push；执行 push 后回读远程分支 SHA。
+
+## MinerU 环境制备（setup-mineru）
+
+- **引导解释器优先用系统解释器（`py -3`），其次 uv**：实测某些机器的 uv 托管 Python 目录
+  （`%APPDATA%\uv\python\...`）会被安全软件改成不可访问的重解析点，`uv venv` 直接失败
+  （WinError 448）；系统解释器不依赖下载，最稳。
+- **用 uv 时把托管 Python 重定位**：`UV_PYTHON_INSTALL_DIR` 指向我们自己的目录，
+  不要用默认落点，否则同样的重解析点问题会在成员机上复现。
+- **报错要可读**：把每个失败命令与关键 stderr 一起抛出，并提示「若提示重解析点/不可访问，
+  说明解释器目录被安全软件接管，请用 --python 指向可用解释器」。
+- 复用已有环境用 `--python <解释器>`；`--dry-run` 先看计划再执行。

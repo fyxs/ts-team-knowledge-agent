@@ -57,22 +57,49 @@ def bundled_uv_candidates() -> list[Path]:
     return [root / "tools" / name for root in roots for name in names]
 
 
+def _usable(command: list[str]) -> bool:
+    """命令能否真正跑起来（避免选到 WindowsApps 的占位 python）。"""
+
+    try:
+        return subprocess.run([*command, "-c", "import sys; print(sys.version_info[0])"],
+                              capture_output=True, text=True, timeout=120).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def resolve_bootstrap() -> list[str] | None:
-    """返回创建环境用的命令前缀，例如 ["uv"] 或 ["py", "-3"]。"""
+    """返回创建环境用的命令前缀。
+
+    顺序：显式指定 → 系统解释器 → 随包 uv → PATH 上的 uv。
+    优先系统解释器：不需要联网下载解释器，也不受 uv 托管目录是否可用影响
+    （实测存在 uv 托管目录被安全软件改成不可访问重解析点的情况）。
+    """
 
     explicit = os.getenv("TS_KB_BOOTSTRAP_PYTHON", "").strip()
     if explicit:
         return [explicit]
+    if os.name == "nt":
+        launcher = shutil.which("py")
+        if launcher and _usable([launcher, "-3"]):
+            return [launcher, "-3"]
+    system_python = shutil.which("python")
+    if system_python and _usable([system_python]):
+        return [system_python]
     for candidate in bundled_uv_candidates():
-        if candidate.is_file():
+        if candidate.is_file() and _usable([str(candidate), "--version"]):
             return [str(candidate)]
     found = shutil.which("uv")
-    if found:
+    if found and _usable([found, "--version"]):
         return [found]
-    for name, probe in (("py", ["py", "-3", "-c", "import sys"]), ("python", ["python", "-c", "import sys"])):
-        if shutil.which(name) and subprocess.run(probe, capture_output=True).returncode == 0:
-            return ["py", "-3"] if name == "py" else ["python"]
     return None
+
+
+def uv_environment(env_dir: Path) -> dict[str, str]:
+    """uv 调用环境：把它托管的 Python 放到我们可控的目录，避开不可访问的默认落点。"""
+
+    environment = dict(os.environ)
+    environment.setdefault("UV_PYTHON_INSTALL_DIR", str(env_dir.parent / "python"))
+    return environment
 
 
 @dataclass
@@ -87,18 +114,24 @@ class SetupResult:
 def create_environment(env_dir: Path, bootstrap: list[str], *, dry_run: bool = False) -> list[str]:
     """创建虚拟环境，返回已执行步骤（命令以列表形式，便于审计与复现）。"""
 
-    if not dry_run:
-        env_dir.parent.mkdir(parents=True, exist_ok=True)
-    if bootstrap and Path(bootstrap[0]).name.startswith("uv"):
-        command = [*bootstrap, "venv", str(env_dir)]
+    is_uv = bool(bootstrap) and Path(bootstrap[0]).name.lower().startswith("uv")
+    if is_uv:
+        commands = [[*bootstrap, "venv", "--python", "3.13", str(env_dir)], [*bootstrap, "venv", str(env_dir)]]
     else:
-        command = [*bootstrap, "-m", "venv", str(env_dir)]
+        commands = [[*bootstrap, "-m", "venv", str(env_dir)]]
     if dry_run:
-        return [" ".join(command)]
-    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900)
-    if result.returncode != 0:
-        raise RuntimeError(f"创建环境失败（{result.returncode}）：{(result.stderr or result.stdout).strip()[:300]}")
-    return [" ".join(command)]
+        return [" ".join(commands[0])]
+    env_dir.parent.mkdir(parents=True, exist_ok=True)
+    errors: list[str] = []
+    for command in commands:
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
+                                errors="replace", timeout=1800, env=uv_environment(env_dir) if is_uv else None)
+        if result.returncode == 0:
+            return [" ".join(command)]
+        detail = (result.stderr or result.stdout).strip().splitlines()[:3]
+        errors.append(f"{' '.join(command)} → {' | '.join(detail)}")
+    raise RuntimeError("创建环境失败：" + " ;; ".join(errors) +
+                       "（若提示重解析点/不可访问，说明解释器目录被安全软件接管，请用 --python 指向可用解释器）")
 
 
 def install_mineru(env_dir: Path, bootstrap: list[str], requirement: str, *, dry_run: bool = False) -> list[str]:
@@ -111,7 +144,8 @@ def install_mineru(env_dir: Path, bootstrap: list[str], requirement: str, *, dry
         command = [str(python), "-m", "pip", "install", requirement]
     if dry_run:
         return [" ".join(command)]
-    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=7200)
+    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                            timeout=7200, env=uv_environment(env_dir) if Path(bootstrap[0]).name.lower().startswith("uv") else None)
     if result.returncode != 0:
         tail = (result.stderr or result.stdout).strip().splitlines()[-6:]
         raise RuntimeError("安装 MinerU 失败：" + " | ".join(tail))

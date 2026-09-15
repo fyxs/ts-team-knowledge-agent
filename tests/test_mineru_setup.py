@@ -30,6 +30,29 @@ def test_default_env_path_is_under_user_directory(monkeypatch, tmp_path):
     assert default_mineru_env_path() == tmp_path / "ts-team-kb" / "mineru-env"
 
 
+def test_resolve_bootstrap_prefers_system_interpreter(monkeypatch):
+    monkeypatch.delenv("TS_KB_BOOTSTRAP_PYTHON", raising=False)
+    monkeypatch.setattr(mineru_setup.shutil, "which", lambda name: f"/fake/{name}" if name in ("py", "python") else None)
+    monkeypatch.setattr(mineru_setup, "_usable", lambda command: True)
+    assert mineru_setup.resolve_bootstrap() == ["/fake/py", "-3"]
+
+
+def test_resolve_bootstrap_falls_back_to_bundled_uv(monkeypatch, tmp_path):
+    monkeypatch.delenv("TS_KB_BOOTSTRAP_PYTHON", raising=False)
+    monkeypatch.setattr(mineru_setup.shutil, "which", lambda name: None)
+    monkeypatch.setattr(mineru_setup, "_usable", lambda command: True)
+    fake_uv = tmp_path / "tools" / "uv.exe"
+    fake_uv.parent.mkdir(parents=True)
+    fake_uv.write_bytes(b"x")
+    monkeypatch.setattr(mineru_setup, "bundled_uv_candidates", lambda: [fake_uv])
+    assert mineru_setup.resolve_bootstrap() == [str(fake_uv)]
+
+
+def test_uv_environment_relocates_managed_python(tmp_path):
+    env = mineru_setup.uv_environment(tmp_path / "mineru-env")
+    assert env["UV_PYTHON_INSTALL_DIR"] == str(tmp_path / "python")
+
+
 def test_setup_reuses_existing_interpreter_and_verifies(tmp_path, monkeypatch):
     python = tmp_path / "python.exe"
     python.write_bytes(b"x")
