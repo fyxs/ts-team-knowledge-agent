@@ -84,3 +84,32 @@ error           异常摘要（正常为 null）
 ## 不做
 
 一期不接入 ELK、Loki 或云日志平台；不把运行日志提交到知识仓，也不以日志替代来源登记、审查记录和 Git 历史。
+
+## 留存规则
+
+以实测增长为准（2026-09-15），分两类：系统产物超限即清理，用户数据不自动删。
+
+```text
+对象                        现状实测                  一年估算   规则
+data/sessions.sqlite3       100KB / 2 会话 6 消息     约 300MB   待定（属用户数据，见下）
+                            （单轮正文约 3.9KB）
+logs/usage/<日期>.jsonl     10 条 / 38KB（2.6KB/条）  约 95MB    **长期保留**
+logs/evaluation-*.json      18 份 / 642KB             约 1.8MB   本机保留最近 30 份，超出删最旧
+logs/inspection-*.json      8 份 / 90KB               约 4MB     本机保留最近 30 份，超出删最旧
+logs/runs.jsonl             71 行 / 26KB              约 7MB     保留 12 个月，之后按月归档
+logs/*.log                  api 37KB · scheduled 37KB 线性增长   单文件超 10MB 轮转、保留 2 份
+知识仓 .git                 12.57MB / 63 提交         —          定期 gc，不做历史压缩
+知识仓 governance/          巡检 8 份 · 评测 4 份     —          代码已裁剪（评测 keep=30），无需额外规则
+```
+
+四条原则：
+
+```text
+1. 系统产物（报告、日志、runs）超限即清理，**一律删最旧的**（用户 2026-09-15 确认）
+2. 用户数据（会话历史）不自动删除：是否清理由用户决定，已提供单条删除入口
+3. 使用埋点长期保留（用户 2026-09-15 明确）：它是检索优化唯一的原料；体积过大时压缩，不删除
+4. 清理必须可审计：每次清理写 logs/prune-runs.jsonl（删了什么、依据哪个上限、释放多少字节）
+```
+
+治理目录的保留上限已由代码保证：`publish_inspection_report` 走 `prune_inspection_reports`，
+`publish_evaluation_report` 默认 `keep=30`，因此共享仓不会无限增长。
