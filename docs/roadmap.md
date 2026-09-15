@@ -85,8 +85,8 @@ dev 分支合并到 main 的节奏（当前 main 落后 33+ 提交）
 质量评测（内容层）  维护机每周一 09:00 自动执行，静默采集已沉淀数据并评测：
                     ts-team-kb evaluate --mode both --publish --if-due --interval-minutes 10080
                     报告写入 governance/<成员>/evaluation/（保留最近 30 份）
-用户侧安装          只装「定时扫描 + 本地服务」两个任务；
-                    巡检与评测属于维护需要，不施加到成员机器
+用户侧安装          定时扫描 + 每日巡检 + 本地服务，三个任务；
+                    每周评测属于维护需要，不施加到成员机器
                     （维护机用 scripts/install-windows-tasks.ps1 -IncludeMaintenance 启用）
 评测集              evaluation/knowledge-questions.json
                     每例含 question / expected_paths / keywords，按索引真实路径维护

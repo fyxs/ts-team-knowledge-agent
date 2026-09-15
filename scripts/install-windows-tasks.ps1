@@ -57,10 +57,7 @@ function New-Launcher {
 }
 
 $vbsScheduled = New-Launcher 'run-scheduled-hidden.vbs' (Join-Path $root 'scripts\run-scheduled.ps1')
-$vbsInspection = $null
-if ($IncludeMaintenance) {
-    $vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
-}
+$vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
 $vbsWeb = New-Launcher 'run-web-service-hidden.vbs' (Join-Path $root 'scripts\run-web-service.ps1')
 
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -70,11 +67,9 @@ $a1 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsSchedu
 $t1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentScheduler' -Action $a1 -Trigger $t1 -Principal $principal -Settings $settings -Force | Out-Null
 
-if ($IncludeMaintenance) {
-    $a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
-    $t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
-    Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
-}
+$a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
+$t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
+Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
 
 $vbsEvaluation = $null
 if ($IncludeMaintenance) {
@@ -89,7 +84,8 @@ $t3 = New-ScheduledTaskTrigger -AtLogOn -User $TaskUser
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentWebService' -Action $a3 -Trigger $t3 -Principal $principal -Settings $settings -Force | Out-Null
 
 $installed = @('TSKnowledgeAgentScheduler')
-if ($IncludeMaintenance) { $installed += 'TSKnowledgeAgentInspection'; $installed += 'TSKnowledgeAgentEvaluation' }
+$installed += 'TSKnowledgeAgentInspection'
+if ($IncludeMaintenance) { $installed += 'TSKnowledgeAgentEvaluation' }
 $installed += 'TSKnowledgeAgentWebService'
 foreach ($n in $installed) {
     $t = Get-ScheduledTask -TaskName $n
