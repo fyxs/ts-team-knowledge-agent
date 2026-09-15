@@ -108,6 +108,22 @@ def ensure_bundled_uv(bundle: Path, out_dir: Path, version: str = UV_VERSION) ->
     return target
 
 
+
+def write_bundle_readme(bundle: Path) -> Path:
+    """把使用说明放进免安装包：解压即可看到，不用另外发文档。
+
+    写成 UTF-8 BOM + CRLF —— Windows 记事本双击打开不会乱码、不会挤成一行。
+    """
+
+    template = PROJECT_ROOT / "packaging" / "bundle-readme.txt"
+    if not template.is_file():
+        raise SystemExit(f"缺少说明模板：{template}")
+    body = template.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\n", "\r\n")
+    target = bundle / "使用说明.txt"
+    target.write_text(body, encoding="utf-8-sig")
+    return target
+
+
 def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: bool = True) -> Path:
     """用 PyInstaller 产出免安装目录，并打成 zip（exe 分发件）。"""
 
@@ -140,6 +156,7 @@ def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: 
         print(result.stderr[-2000:])
         raise SystemExit("PyInstaller 构建失败")
     bundle = target / 'ts-team-kb'
+    write_bundle_readme(bundle)
     if bundle_uv:
         uv_path = ensure_bundled_uv(bundle, out_dir)
         print(f'bundled_uv={uv_path} bytes={uv_path.stat().st_size}')
