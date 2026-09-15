@@ -62,6 +62,30 @@ ts-team-kb serve
 
 详细步骤、前置检查与常见问题见 [docs/local-install-and-serve.md](docs/local-install-and-serve.md)。
 
+## 在新机器上部署（Windows）
+
+项目脚本不写死任何机器路径：`scripts/*.ps1` 用自身位置定位项目根目录，
+配置文件通过环境变量或安装器生成的 `.ts-kb-workspace` 指针文件定位。
+
+```powershell
+# 1. 克隆应用仓并创建虚拟环境
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+
+# 2. 初始化工作目录（源目录、工作目录、共享知识仓按本机情况指定）
+.\.venv\Scripts\ts-team-kb.exe init --personal-workspace <成员> `
+    --shared-source-directory <本机源目录> --working-directory <本机工作目录>
+
+# 3. 安装启动器与定时任务（可重复执行，会重新生成启动器并刷新任务）
+$env:TS_KB_CONFIG = "<本机工作目录>\ts-kb.json"
+.\scripts\install-windows-tasks.ps1
+```
+
+安装器会写入 `.ts-kb-workspace` 指针、生成隐藏启动器，并注册三个任务：
+`TSKnowledgeAgentScheduler`（周期扫描）、`TSKnowledgeAgentInspection`（每日巡检）、
+`TSKnowledgeAgentWebService`（登录自启 Web 服务）。任务均为登录后运行；
+启动失败会写入 `logs/runner-errors.log`，不会静默失败。
+
 ## 常用命令
 
 ```text
