@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 
+from ts_knowledge_agent.services.member_space import ensure_member_space
+
 DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL = "git@github.com:fyxs/ts-team-knowledge-base.git"
 DEFAULT_SCAN_INTERVAL_MINUTES = 60
 MIN_SCAN_INTERVAL_MINUTES = 5
@@ -127,3 +129,4 @@ def initialize_working_directory(settings: Settings) -> None:
         raise RuntimeError("failed to write configuration file")
     if not (settings.shared_knowledge_repository_directory / ".git").is_dir():
         raise RuntimeError("shared knowledge repository was not initialized")
+    ensure_member_space(settings.shared_knowledge_repository_directory, settings.personal_workspace)

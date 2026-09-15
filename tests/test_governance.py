@@ -18,7 +18,8 @@ def test_publish_creates_member_tree_outside_knowledge_space(tmp_path):
     assert published.parent == tmp_path / "governance" / "whm" / "inspection"
     assert (tmp_path / "governance" / "whm" / "inspection-latest.json").is_file()
     assert (tmp_path / "governance" / "whm" / "README.md").is_file()
-    assert not (tmp_path / "members").exists(), "治理记录不得写入个人知识空间"
+    knowledge = tmp_path / "members" / "whm"
+    assert sorted(item.name for item in knowledge.iterdir()) == ["README.md"], "个人空间只能有知识内容，不得出现治理文件"
 
 
 def test_latest_matches_history_entry(tmp_path):

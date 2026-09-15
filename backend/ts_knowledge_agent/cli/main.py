@@ -20,6 +20,7 @@ from ts_knowledge_agent.config import (
 )
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.governance import publish_inspection_report
+from ts_knowledge_agent.services.member_space import ensure_member_space
 from ts_knowledge_agent.services.inspection import inspect_knowledge_base, write_inspection_report
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
@@ -137,6 +138,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"initialized working_directory={settings.working_directory} personal_workspace={settings.personal_workspace} "
             f"shared_knowledge_repository_directory={settings.shared_knowledge_repository_directory}"
         )
+        space = ensure_member_space(
+            settings.shared_knowledge_repository_directory, settings.personal_workspace
+        )
+        print(f"member_knowledge={space['knowledge']} member_governance={space['governance']}")
         config_path = settings.working_directory / "ts-kb.json"
         if args.skip_model_setup or not sys.stdin.isatty():
             print("model setup skipped; run ts-team-kb config set / config set-key later")

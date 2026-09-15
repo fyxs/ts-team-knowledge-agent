@@ -151,6 +151,10 @@ ts-team-kb inspect --per-type 6        # 抽样巡检并发布治理记录
 ts-team-kb inspect --no-publish        # 只写本机报告
 ```
 
+初始化时同时建好个人知识目录与治理目录；每日 08:30 由计划任务
+`TSKnowledgeAgentInspection` 自动巡检一次，报告随下一轮同步推给团队。
+```
+
 ## 已知环境注意事项
 
 ```text
