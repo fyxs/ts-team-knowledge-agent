@@ -21,3 +21,5 @@ frontend/dist/
 frontend/tsconfig.tsbuildinfo
 **/__pycache__/
 .pytest_cache/
+# machine-local pointer written by install-windows-tasks.ps1
+.ts-kb-workspace
