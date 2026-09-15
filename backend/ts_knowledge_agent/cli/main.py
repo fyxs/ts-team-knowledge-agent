@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import getpass
 import os
 import json
@@ -21,7 +22,13 @@ from ts_knowledge_agent.config import (
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.governance import publish_inspection_report
 from ts_knowledge_agent.services.member_space import ensure_member_space
-from ts_knowledge_agent.services.inspection import inspect_knowledge_base, write_inspection_report
+from ts_knowledge_agent.services.inspection import (
+    DEFAULT_INSPECTION_INTERVAL_MINUTES,
+    append_inspection_run,
+    inspect_knowledge_base,
+    is_inspection_due,
+    write_inspection_report,
+)
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
@@ -95,6 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
     config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
     inspect = sub.add_parser("inspect")
     inspect.add_argument("--per-type", type=int, default=6)
+    inspect.add_argument("--if-due", action="store_true", help="距上次巡检达到间隔时才执行")
+    inspect.add_argument("--interval-minutes", type=int, default=DEFAULT_INSPECTION_INTERVAL_MINUTES)
     inspect.add_argument("--json", action="store_true")
     inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
     schemas = sub.add_parser("schemas")
@@ -294,7 +303,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         parser.error("config requires an action: show | set | set-key")
     if args.command == "inspect":
+        if args.if_due and not is_inspection_due(settings.working_directory, args.interval_minutes):
+            print(f"skipped=not_due interval_minutes={args.interval_minutes}")
+            return 0
+        started_at = datetime.now(timezone.utc).isoformat()
         report = inspect_knowledge_base(settings, per_type=args.per_type)
+        append_inspection_run(settings.working_directory, report, started_at)
         path = write_inspection_report(settings.working_directory, report)
         payload = report.to_dict()
         if args.json:

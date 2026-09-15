@@ -19,6 +19,8 @@ TOOL_OUTPUT_EXTENSIONS = frozenset({".pdf", ".docx", ".doc", ".pptx", ".ppt", ".
 # 截断启发式只适用于正文型产物：幻灯片文本天然是片段，不以标点收尾属正常
 TRUNCATION_CHECK_EXTENSIONS = frozenset({".pdf", ".docx", ".doc"})
 NEAR_EMPTY_CHARS = 200
+INSPECTION_RUNS_FILE = "inspection-runs.jsonl"
+DEFAULT_INSPECTION_INTERVAL_MINUTES = 1440
 
 
 @dataclass(frozen=True)
@@ -181,6 +183,59 @@ def inspect_knowledge_base(settings: Settings, per_type: int = 6) -> InspectionR
         checks=checks,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
+
+
+def append_inspection_run(working_directory: Path, report: "InspectionReport", started_at: str) -> Path:
+    """追加一条巡检运行记录，供到期判定与趋势统计使用。"""
+
+    path = Path(working_directory) / "logs" / INSPECTION_RUNS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "started_at": started_at,
+        "sampled": report.sampled,
+        "clean": report.clean,
+        "blocking": report.blocking,
+        "issue_counts": dict(report.issue_counts),
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return path
+
+
+def last_inspection_started_at(working_directory: Path) -> datetime | None:
+    """读取最近一次巡检的开始时间；没有记录时返回 None。"""
+
+    path = Path(working_directory) / "logs" / INSPECTION_RUNS_FILE
+    if not path.is_file():
+        return None
+    for line in reversed(path.read_text(encoding="utf-8", errors="replace").splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line).get("started_at")
+            if not raw:
+                continue
+            return datetime.fromisoformat(raw)
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return None
+
+
+def is_inspection_due(
+    working_directory: Path,
+    interval_minutes: int = DEFAULT_INSPECTION_INTERVAL_MINUTES,
+    now: datetime | None = None,
+) -> bool:
+    """判断距上次巡检是否已达到间隔；没有历史记录时视为到期。"""
+
+    last = last_inspection_started_at(working_directory)
+    if last is None:
+        return True
+    current = now or datetime.now(timezone.utc)
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    return (current - last).total_seconds() / 60.0 >= float(interval_minutes)
 
 
 def write_inspection_report(working_directory: Path, report: InspectionReport) -> Path:
