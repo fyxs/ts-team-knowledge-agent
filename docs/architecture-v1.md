@@ -20,6 +20,10 @@ React Web UI（Vite 构建产物，由后端托管）
         ├── 索引器        SQLite + FTS5（FTS 优先，中文子串兜底）
         ├── Git 适配器    提交、拉取、rebase、推送、冲突保护
         ├── 登记器        来源登记 / 知识条目 / 审查记录（JSONL）
+        ├── 会话存储      会话与历史消息（本机 SQLite，不进共享知识仓）
+        ├── 质量巡检      分层抽样 + 结构校验，产出巡检报告
+        ├── 检索评测      评测集自动生成 + hit@k / MRR / 引用质量
+        ├── 使用埋点      每轮问答落检索链路 trace（无关闭开关），按日汇总
         └── 调度器        计划任务唤醒 + 按间隔判断是否执行
         │
 Agent 运行时（提示词 + 技能 + 知识库工具 + 模型 provider）
@@ -51,6 +55,64 @@ error        错误
 步数上限        model_max_steps（默认 8），超出返回 max_steps_exceeded
 ```
 
+## 会话与历史
+
+```text
+存储      <工作目录>/data/sessions.sqlite3（本机；不进共享知识仓）
+表结构    sessions(id, title, created_at, updated_at)
+          messages(id, session_id, kind, payload, created_at)
+消息类型  user（提问）/ process（工具过程）/ answer（回答，含引用与步数）/ error
+标题      首条提问自动成为标题，上限 20 字；可重命名，超长按上限截断
+```
+
+接口：
+
+```text
+GET    /api/v1/sessions                  会话列表（id、title、updatedAt 毫秒时间戳）
+POST   /api/v1/sessions                  新建会话
+GET    /api/v1/sessions/{id}/messages    历史消息（含引用与工具过程，可直接回放）
+PATCH  /api/v1/sessions/{id}             重命名（空标题 400，超长截断）
+DELETE /api/v1/sessions/{id}             删除会话及其全部消息
+GET    /api/v1/sessions/search?q=&limit= 历史内容检索（返回命中片段与会话信息）
+POST   /api/v1/chat、/api/v1/chat/stream  接受 session_id，落库用户消息、工具过程与回答
+```
+
+历史全文检索：
+
+```text
+索引      messages_fts（与 messages 同库；删除会话时同步清理；索引为空时按历史消息自动补建）
+中文      索引侧与查询侧**对称**做二元片段展开——只做单侧会导致两字关键词召不回
+片段      在原始文本上以命中词为中心截取，不把索引用的二元尾巴带进摘要
+范围      用户提问与回答正文；工具过程（steps）不入索引
+```
+
+地址栏路由：
+
+```text
+参数      ?session=<会话 id>
+切换/新建   pushState（浏览器后退可在会话之间回退）
+程序性纠正  replaceState（分享链接指向已删除会话时回落到最近一条并改写地址栏）
+```
+
+## 治理与自检
+
+三类治理产物都落在共享知识仓 `governance/<成员>/` 下，随既有同步推送：
+
+```text
+巡检   ts-team-kb inspect       分层抽样 + 结构校验；区分阻断级与提示级
+评测   ts-team-kb evaluate      评测集自动生成，输出 hit@k / MRR / 引用质量
+埋点   logs/usage/<日期>.jsonl  每轮问答的检索链路 trace；按日汇总为 <年月>.jsonl
+```
+
+计划任务（每台成员机各跑自己的一份）：
+
+```text
+TSKnowledgeAgentScheduler    每 5 分钟敲门，应用层按 scan_interval_minutes 判断是否真跑
+TSKnowledgeAgentInspection   每天 08:30，错过唤醒补跑
+TSKnowledgeAgentEvaluation   每周一 09:00（安装时需带 -IncludeMaintenance）
+TSKnowledgeAgentWebService   用户登录时自启（幂等守护：端口已在监听则直接退出）
+```
+
 ## 成员空间
 
 成员空间（`members/<成员标识>/`）表示**写入归属与维护责任**，不是可见性隔离。进入共享知识仓的内容默认团队共享，检索默认覆盖全部成员空间。
@@ -59,8 +121,8 @@ error        错误
 
 ```text
 源目录        只读
-本机            配置、SQLite、日志、反馈、密钥、隔离产物
-Git 知识仓      知识 Markdown、图片、登记文件
+本机          配置、SQLite（状态库 / 会话库）、日志、反馈、埋点、密钥、隔离产物
+Git 知识仓     知识 Markdown、图片、登记文件、治理报告（governance/<成员>/）
 ```
 
 原始文件、SQLite、日志、本机配置和模型密钥不进入代码仓库或共享知识仓。

@@ -18,9 +18,9 @@
 
 ```json
 {"started_at": "…", "finished_at": "…", "duration_seconds": 760.6,
- "scanned": 93, "queued": 4, "batches": 1, "converted": 3, "skipped": 89,
- "failed": 1, "missing": 0, "indexed": 100, "sync_status": "pushed",
- "reason_counts": {"unchanged": 81, "unsupported": 8, "previous_failed": 1},
+ "scanned": 94, "queued": 0, "batches": 0, "converted": 0, "warned": 0, "skipped": 94,
+ "failed": 0, "missing": 0, "indexed": 100, "sync_status": "pushed",
+ "reason_counts": {"unchanged": 85, "unsupported": 8, "excluded": 1},
  "error": null}
 ```
 
@@ -42,6 +42,7 @@ error           异常摘要（正常为 null）
 ```text
 源状态     discovered / converted / quality_failed / trusted?（不使用）/
            failed_retryable / blocked_secret / ignored / source_missing
+           quality_warned（源侧自身质量问题：入库可用但标记告警，不计失败）
 判断依据   源哈希变化 → source_changed；输出缺失 → output_missing；
            上次失败 → previous_failed；未变化 → unchanged
 ```
@@ -53,6 +54,32 @@ error           异常摘要（正常为 null）
 ## 安全
 
 不记录文件正文、模型密钥、Token、密码、Cookie、完整提示词与响应。日志与数据库不进入团队知识仓。
+
+## 使用埋点（usage）
+
+每轮问答落一条 trace，用于改进检索质量。**无关闭开关**（产品决定：静悄悄采集必要数据）。
+
+```text
+位置      <工作目录>/logs/usage/<日期>.jsonl（本机，每次问答一行）
+汇总      按日汇总为 <年月>.jsonl，写入共享知识仓 governance/<成员>/usage/，随既有同步推送
+字段      用户提问原文 / 模型实际发出的检索词（含 mode）/ 命中路径与 rank、score /
+          最终引用 / retrieved_but_unused / cited_not_retrieved / 耗时 / 错误
+```
+
+边界：记录**提问原文与检索链路**，不记录文件正文、模型密钥、Token、密码，也不保存发给模型的完整上下文与模型原始响应。
+它属于使用数据，不是运行日志：运行日志回答「流程是否正常」，埋点回答「检索是否好用」。
+
+## 巡检与评测报告
+
+```text
+巡检   logs/inspection-<时间戳>.json + inspection-latest.json（阻断级 / 提示级分开计数）
+       logs/inspection-runs.jsonl 记录每次真实巡检，用于 --if-due 到期判定
+评测   logs/evaluation-<时间戳>.json + evaluation-latest.json
+       （retrieval 自然语言 / 关键词两套指标、citations 引用质量）
+上推   两份报告同步到 governance/<成员>/{inspection,evaluation}/
+```
+
+报告是**产物**，日志是**过程**：报告进共享仓供团队查看，运行日志留在本机。
 
 ## 不做
 
