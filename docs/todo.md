@@ -126,9 +126,6 @@ C. 加共享口令    一次输入、前端存本地，同事仍可用（折中�
 ## 五、其它暂缓（用户明确：后面再看）
 
 ```text
-· 免安装包是否内置 uv（tools/uv.exe，约 35MB，zip 会从 17MB 增到约 50MB）
-  这样"完全无 Python / 无 uv"的机器也能一步制备 MinerU；当前依赖机器上已有 uv 或 Python。
-  代码已支持 tools/uv.exe 自动探测，只差构建时把它放进包里
 · NPX 分发（npm 包，平台二进制）：**暂缓**（用户 2026-09-15：先只做 exe，初期铺太开不好逐个验证）
 · pipx / PyPI 分发：**暂缓**（同上；依赖写法已按方式 A 调整，MinerU 随包，
   随时可发布，不需要额外改造）
@@ -153,6 +150,7 @@ C. 加共享口令    一次输入、前端存本地，同事仍可用（折中�
   干净目录演练一次通过（解压 → 制备 → 真实 PDF 转换 → 界面 200）
   过程中修掉三个产品级缺陷：打包取到旧源码、convert 漏传 MinerU 解释器、
   MinerU 未声明依赖 six 导致首次转换必崩
+· 免安装包内置 uv（2026-09-15 用户同意）：tools/uv.exe，缺 Python 的机器也能一步制备 MinerU
 · MinerU 制备命令已完成（2026-09-15）：ts-team-kb setup-mineru
   建环境 → 安装 MinerU[pipeline] → 自检 → 写 mineru_python；支持 --python 复用与 --dry-run
 · 安装方式以 exe 为先（2026-09-15 用户决定）

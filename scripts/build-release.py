@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import zipfile
 import tempfile
 from pathlib import Path
 
@@ -57,7 +58,57 @@ def build(out_dir: Path) -> Path:
 
 
 
-def build_bundle(out_dir: Path, build_python: Path | None = None) -> Path:
+
+UV_VERSION = "0.12.15"
+UV_ASSET = "uv-x86_64-pc-windows-msvc.zip"
+
+
+def ensure_bundled_uv(bundle: Path, out_dir: Path, version: str = UV_VERSION) -> Path:
+    """把 uv.exe 放进免安装包的 tools/ 目录。
+
+    这样即使目标机器上既没有 Python 也没有 uv，setup-mineru 也能一步制备 MinerU，
+    不需要成员先自行安装任何东西。
+
+    来源优先 PyPI（与运行时同一分发通道，实测稳定且带缓存），GitHub Release 作为兜底。
+    """
+
+    import urllib.request
+
+    target = bundle / "tools" / "uv.exe"
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    cache = out_dir / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+
+    # 路线一：PyPI 上的 uv wheel 里就有 uv.exe（*.data/scripts/uv.exe）
+    result = subprocess.run([sys.executable, "-m", "pip", "download", "uv", "--no-deps", "--only-binary", ":all:",
+                             "-d", str(cache)], capture_output=True, text=True)
+    if result.returncode == 0:
+        wheels = sorted(cache.glob("uv-*.whl"))
+        if wheels:
+            with zipfile.ZipFile(wheels[-1]) as handle:
+                member = next((name for name in handle.namelist() if name.lower().endswith("scripts/uv.exe")), None)
+                if member is None:
+                    member = next((name for name in handle.namelist() if name.lower().endswith("uv.exe")), None)
+                if member is not None:
+                    target.write_bytes(handle.read(member))
+                    return target
+
+    # 路线二：GitHub Release 资源
+    archive = cache / f"uv-{version}-{UV_ASSET}"
+    if not archive.exists():
+        url = f"https://github.com/astral-sh/uv/releases/download/{version}/{UV_ASSET}"
+        print(f"uv: 从 GitHub 下载 {url}")
+        with urllib.request.urlopen(url, timeout=900) as response:
+            archive.write_bytes(response.read())
+    with zipfile.ZipFile(archive) as handle:
+        member = next(name for name in handle.namelist() if name.lower().endswith("uv.exe"))
+        target.write_bytes(handle.read(member))
+    return target
+
+
+def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: bool = True) -> Path:
     """用 PyInstaller 产出免安装目录，并打成 zip（exe 分发件）。"""
 
     import zipfile
@@ -89,6 +140,9 @@ def build_bundle(out_dir: Path, build_python: Path | None = None) -> Path:
         print(result.stderr[-2000:])
         raise SystemExit("PyInstaller 构建失败")
     bundle = target / 'ts-team-kb'
+    if bundle_uv:
+        uv_path = ensure_bundled_uv(bundle, out_dir)
+        print(f'bundled_uv={uv_path} bytes={uv_path.stat().st_size}')
     version = _project_version()
     archive = out_dir / f"ts-team-kb-{version}-win-x64.zip"
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
@@ -112,6 +166,7 @@ def main() -> int:
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dist-release"))
     parser.add_argument("--exe", action="store_true", help="同时构建免安装目录并打包 zip")
     parser.add_argument("--build-python", default=None, help="含 PyInstaller 的解释器路径")
+    parser.add_argument("--no-bundle-uv", action="store_true", help="不把 uv.exe 打进免安装包")
     args = parser.parse_args()
     wheel = build(Path(args.out))
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
@@ -119,7 +174,8 @@ def main() -> int:
     print(f"bytes={wheel.stat().st_size}")
     print(f"sha256={digest}")
     if args.exe:
-        archive = build_bundle(Path(args.out), Path(args.build_python) if args.build_python else None)
+        archive = build_bundle(Path(args.out), Path(args.build_python) if args.build_python else None,
+                               bundle_uv=not args.no_bundle_uv)
         print(f"zip={archive}")
         print(f"zip_bytes={archive.stat().st_size}")
         print(f"zip_sha256={hashlib.sha256(archive.read_bytes()).hexdigest()}")

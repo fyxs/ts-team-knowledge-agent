@@ -162,7 +162,7 @@ Enable-ScheduledTask  -TaskName 'TSKnowledgeAgentScheduler'
 5. 启动   登录后由计划任务自动拉起；也可手动 ts-team-kb.exe serve --host 0.0.0.0 --port 8088
 ```
 
-**包内含什么**：Python 运行时 + 应用 + 前端产物（357 KB）——因此**不需要装 Python，也不需要 Node**。
+**包内含什么**：Python 运行时 + 应用 + 前端产物（357 KB）+ `tools/uv.exe`（41.5 MB）——因此**不需要预装 Python、Node 或 uv**；缺 Python 时 uv 会自己准备。免安装包合计约 72 MB，zip 约 34 MB。
 
 **包内不含什么**：MinerU 及其重依赖（torch / transformers，约 1.1 GB）。原因：转换走独立解释器进程，
 打包进 exe 既不可行也不稳定。因此 exe 模式下 PDF / DOCX / PPTX 转换需要额外制备 MinerU 环境：
@@ -176,8 +176,9 @@ Enable-ScheduledTask  -TaskName 'TSKnowledgeAgentScheduler'
 
 可选：--python <已有解释器> 复用现成环境（不新建、不下载）；
       --dry-run 只打印将执行的步骤；--no-verify 跳过自检。
-引导解释器优先用随包 tools/ 目录里的 uv，其次 PATH 上的 uv，再次系统 Python；
-都没有时命令会明确提示怎么补。
+引导解释器的选择顺序：显式 --python → 系统解释器（py -3 / python）→ **包内自带的 uv**（tools/uv.exe）
+→ PATH 上的 uv。因此目标机器上**什么都不用预装**：包内已含 uv，缺少 Python 时由 uv 自动准备。
+（实测：清空 PATH 后仍能自动选中包内 uv 并给出正确的建环境与安装命令。）
 ```
 
 > 注：exe 与 pipx 两条路线的差异仅在此处——exe 拿不到进程外的大依赖，pip 装则天然带全。
