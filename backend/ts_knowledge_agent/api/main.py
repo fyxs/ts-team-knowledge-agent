@@ -175,6 +175,44 @@ def session_messages(session_id: str) -> dict:
         store.close()
 
 
+class SessionRenamePayload(BaseModel):
+    title: str
+
+
+@app.patch("/api/v1/sessions/{session_id}")
+def rename_session(session_id: str, payload: SessionRenamePayload) -> dict:
+    """重命名会话；标题超长按上限截断，空白标题拒绝。"""
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title must not be empty")
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        if store.get_session(session_id) is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        store.rename_session(session_id, title)
+        updated = store.get_session(session_id)
+        return updated.to_dict() if updated else {}
+    finally:
+        store.close()
+
+
+@app.delete("/api/v1/sessions/{session_id}")
+def delete_session(session_id: str) -> dict:
+    """删除会话及其全部消息。"""
+
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        if store.get_session(session_id) is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        store.delete_session(session_id)
+        return {"deleted": True, "session_id": session_id}
+    finally:
+        store.close()
+
+
 def _persist_turn(store: SessionStore, session_id: str, question: str, collector, result) -> None:
     """把一轮对话写入本机会话库：用户消息、工具过程、回答或错误。"""
 

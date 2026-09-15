@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SESSIONS_DATABASE = "sessions.sqlite3"
-TITLE_LIMIT = 40
+TITLE_LIMIT = 20
 DEFAULT_TITLE = "新会话"
 
 
@@ -95,7 +95,10 @@ class SessionStore:
         return SessionSummary(row["id"], row["title"], row["updated_at"])
 
     def rename_session(self, session_id: str, title: str) -> None:
-        self.connection.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, session_id))
+        """重命名：与首条提问共用同一套规范化（压缩空白 + 截断到标题上限）。"""
+
+        normalized = session_title_from(title or "", limit=TITLE_LIMIT)
+        self.connection.execute("UPDATE sessions SET title = ? WHERE id = ?", (normalized, session_id))
         self.connection.commit()
 
     def touch_session(self, session_id: str) -> None:

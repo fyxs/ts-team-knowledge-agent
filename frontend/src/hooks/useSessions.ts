@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSession as createSessionRequest, listSessions, type SessionSummary } from "../api/sessions";
 
 /** 会话标题上限；超出部分截断，避免超长问题把列表行撑开。 */
-const TITLE_MAX = 40;
+const TITLE_MAX = 20;
 
 const PLACEHOLDER_TITLE = "新会话";
 

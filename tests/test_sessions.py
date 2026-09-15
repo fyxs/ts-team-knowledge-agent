@@ -2,6 +2,7 @@ from pathlib import Path
 
 from ts_knowledge_agent.services.sessions import (
     DEFAULT_TITLE,
+    TITLE_LIMIT,
     SessionStore,
     session_title_from,
 )
@@ -66,5 +67,26 @@ def test_delete_session_removes_messages(tmp_path):
 
 def test_title_truncates_and_collapses_whitespace():
     assert session_title_from("  多  空格   问题  ") == "多 空格 问题"
-    assert len(session_title_from("字" * 80)) == 40
+    assert len(session_title_from("字" * 80)) == TITLE_LIMIT
     assert session_title_from("") == DEFAULT_TITLE
+
+def test_rename_truncates_to_title_limit(tmp_path):
+    from ts_knowledge_agent.services.sessions import TITLE_LIMIT
+
+    store = _store(tmp_path)
+    session = store.create_session("原始标题")
+    store.rename_session(session.id, "这是一个非常非常长的会话标题它应当被截断到上限之内再保存")
+    renamed = store.get_session(session.id)
+    assert renamed is not None
+    assert len(renamed.title) <= TITLE_LIMIT
+    store.close()
+
+
+def test_delete_session_removes_messages(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("待删除")
+    store.append_message(session.id, "user", {"content": "问"})
+    store.delete_session(session.id)
+    assert store.get_session(session.id) is None
+    assert store.list_messages(session.id) == []
+    store.close()

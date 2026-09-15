@@ -42,3 +42,19 @@ export async function fetchSessionMessages(
   );
   return { session: data.session ?? null, messages: data.messages ?? [] };
 }
+
+export async function renameSession(sessionId: string, title: string): Promise<SessionSummary> {
+  return readJson<SessionSummary>(
+    await fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+  );
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  await readJson<{ deleted?: boolean }>(
+    await fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
+  );
+}
