@@ -23,3 +23,5 @@ frontend/tsconfig.tsbuildinfo
 .pytest_cache/
 # machine-local pointer written by install-windows-tasks.ps1
 .ts-kb-workspace
+# 发布构建产物（由 scripts/build-release.py 生成）
+dist-release/

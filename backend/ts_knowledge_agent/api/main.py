@@ -395,6 +395,11 @@ def resolve_web_dist() -> Path | None:
     if configured:
         candidate = Path(configured).expanduser()
         return candidate if (candidate / "index.html").is_file() else None
+    # 发布安装：前端产物随包分发（ts_knowledge_agent/web/），成员机无需 Node。
+    packaged = Path(__file__).resolve().parent.parent / "web"
+    if (packaged / "index.html").is_file():
+        return packaged
+    # 开发环境：仓库内的 frontend/dist
     default = Path(__file__).resolve().parents[3] / "frontend" / "dist"
     return default if (default / "index.html").is_file() else None
 
