@@ -152,38 +152,41 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="settings-panel">
       <section className="settings-section">
         <h3 className="settings-section-title">模型</h3>
-        {FIELDS.map((field) => (
-          <label key={field.key}>
-            {field.label}
+        <div className="settings-fields">
+          {FIELDS.map((field) => (
+            <label key={field.key} className={field.key === "base_url" ? "settings-span" : undefined}>
+              {field.label}
+              <input
+                value={draft[field.key]}
+                placeholder={field.hint}
+                onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })}
+              />
+              <span className="field-hint">{field.hint}</span>
+            </label>
+          ))}
+          <label>
+            最大步数
             <input
-              value={draft[field.key]}
-              placeholder={field.hint}
-              onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })}
+              type="number"
+              min={1}
+              max={20}
+              value={draft.max_steps}
+              onChange={(event) => setDraft({ ...draft, max_steps: Number(event.target.value) || 1 })}
             />
-            <span className="field-hint">{field.hint}</span>
+            <span className="field-hint">Agent 一轮最多调用多少次工具</span>
           </label>
-        ))}
-        <label>
-          最大步数
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={draft.max_steps}
-            onChange={(event) => setDraft({ ...draft, max_steps: Number(event.target.value) || 1 })}
-          />
-          <span className="field-hint">Agent 一轮最多调用多少次工具</span>
-        </label>
-        <label>
-          最大输出 Token
-          <input
-            type="number"
-            min={256}
-            step={256}
-            value={draft.max_tokens}
-            onChange={(event) => setDraft({ ...draft, max_tokens: Number(event.target.value) || 4096 })}
-          />
-        </label>
+          <label>
+            最大输出 Token
+            <input
+              type="number"
+              min={256}
+              step={256}
+              value={draft.max_tokens}
+              onChange={(event) => setDraft({ ...draft, max_tokens: Number(event.target.value) || 4096 })}
+            />
+            <span className="field-hint">单次回答最多生成多少 token，默认 4096</span>
+          </label>
+        </div>
       </section>
 
       <section className="settings-section">
@@ -203,7 +206,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={startScan} disabled={busyAction === "scan"}>
             立即扫描
           </button>
-          <button type="button" onClick={() => void refreshRunStatus()}>刷新状态</button>
+          <button type="button" className="is-ghost" onClick={() => void refreshRunStatus()}>刷新状态</button>
         </div>
         <div className="settings-status">
           {scanStatus && <div>{scanStatus}</div>}

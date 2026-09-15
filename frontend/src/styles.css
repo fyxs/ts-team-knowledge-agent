@@ -26,7 +26,7 @@ body{
   height:100dvh;
   display:flex;
   flex-direction:column;
-  gap:var(--space-5);
+  gap:var(--space-4);
 }
 
 /* 对话滚动只发生在消息区：面板与外壳都不产生页面级滚动 */
@@ -59,7 +59,7 @@ body{
 
 /* ---------- 对话面板 ---------- */
 /* position:relative 给收起态的悬浮按钮组当定位基准 */
-.chat-layout{position:relative;width:100%;flex:1;min-height:0;display:grid;grid-template-columns:var(--session-panel-w) minmax(0,1fr);gap:var(--space-5)}
+.chat-layout{position:relative;width:100%;flex:1;min-height:0;display:grid;grid-template-columns:var(--session-panel-w) minmax(0,1fr);gap:var(--space-4)}
 .chat-panel{
   display:flex;flex-direction:column;width:100%;
   flex:1;min-height:0;
@@ -70,7 +70,7 @@ body{
   overflow:hidden;
 }
 /* 一行式标题栏：类别标签与标题同基线并排；min-height 与 .session-head 取同一值，两个头部等高 */
-.chat-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) var(--space-6);min-height:56px;border-bottom:1px solid var(--border)}
+.chat-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding:var(--space-3) var(--space-4);min-height:56px;border-bottom:1px solid var(--border)}
 .chat-heading-main{display:flex;align-items:baseline;gap:var(--space-3);min-width:0}
 .eyebrow{flex:none;font-family:var(--font-mono);color:var(--meta);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase}
 .chat-heading h1{margin:0;min-width:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display);line-height:var(--leading-tight);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -88,7 +88,7 @@ body{
 .session-new:active{background:var(--accent-active)}
 .session-new:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 /* 折叠控件：只在宽屏出现（窄屏由抽屉与顶栏按钮负责），与「新建」并排待在面板头部 */
-.session-collapse{display:none;flex:none;width:24px;height:24px;place-items:center;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--meta);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.session-collapse{display:none;flex:none;width:24px;height:24px;padding:0;place-items:center;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--meta);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .session-collapse:hover{background:var(--accent-hover);color:var(--fg)}
 .session-collapse:active{background:var(--accent-active)}
 .session-collapse:focus-visible{outline:none;box-shadow:var(--focus-ring)}
@@ -100,16 +100,44 @@ body{
 .session-empty{margin:var(--space-4) var(--space-2);color:var(--meta);font-size:var(--text-xs)}
 .session-group{margin:var(--space-3) var(--space-2) var(--space-1);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);letter-spacing:.04em}
 .session-group:first-child{margin-top:var(--space-2)}
-.session-item{display:block;width:100%;text-align:left;padding:var(--space-2) var(--space-3);border:0;border-radius:var(--radius-md);background:transparent;color:inherit;font:inherit;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard)}
+/* 行高和重命名输入框的高必须来自同一个值：不这样的话进出重命名时这一行会跳——
+   输入框多一圈边框，正好比行高出 2px。 */
+.session-row{position:relative;--session-slot:calc(24px + var(--space-2));--session-row-h:calc(var(--space-2) * 2 + var(--text-sm) * 1.4)}
+.session-item{display:block;width:100%;min-height:var(--session-row-h);text-align:left;padding:var(--space-2) var(--space-3);border:0;border-radius:var(--radius-md);background:transparent;color:inherit;font:inherit;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard)}
 .session-item:hover{background:var(--accent-hover)}
 .session-item:active{background:var(--accent-active)}
 .session-item:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .session-title{display:block;font-size:var(--text-sm);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.session-meta{display:block;margin-top:2px;font-family:var(--font-mono);font-size:var(--text-xs);line-height:1.4;color:var(--meta)}
 .session-item[aria-current="true"]{background:var(--accent)}
 .session-item[aria-current="true"] .session-title{color:var(--accent-on);font-weight:600}
-.session-item[aria-current="true"] .session-meta{color:var(--fg-2)}
 .session-item[aria-current="true"]:hover{background:var(--accent-hover)}
+
+/* 更多菜单：入口在悬浮或键盘聚焦时出现，选中的那条常显。
+   行让出按钮那块宽度，而不是把按钮叠在标题上——叠上去任何底板都会把某个汉字切在半路。 */
+.session-actions{position:absolute;right:var(--space-3);top:50%;transform:translateY(-50%);display:flex;opacity:0;visibility:hidden;transition:opacity var(--motion-fast) var(--ease-standard),visibility var(--motion-fast)}
+.session-row:hover .session-item,
+.session-row:focus-within .session-item,
+.session-row:has(.session-item[aria-current="true"]) .session-item{padding-right:calc(var(--space-3) + var(--session-slot))}
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions,
+.session-row:has(.session-item[aria-current="true"]) .session-actions{opacity:1;visibility:visible}
+.session-action{width:24px;height:24px;padding:0;display:grid;place-items:center;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--fg-2);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.session-action:hover{background:var(--accent-active);color:var(--fg)}
+.session-action:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+
+.session-menu{position:absolute;z-index:20;top:calc(100% - 6px);right:var(--space-3);min-width:116px;padding:var(--space-1);display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-float)}
+.session-menu-item{display:flex;align-items:center;gap:var(--space-2);width:100%;padding:var(--space-2) var(--space-3);border:0;border-radius:var(--radius-md);background:transparent;color:var(--fg);font:inherit;font-size:var(--text-xs);text-align:left;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.session-menu-item svg{flex:none;color:var(--fg-2)}
+.session-menu-item:hover{background:var(--accent-hover)}
+.session-menu-item:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 危险项：红字压灰底只有约 3.5:1（浅色下更差），过不了正文 4.5:1，所以悬浮直接反色成实心。 */
+.session-menu-item.is-danger,.session-menu-item.is-danger svg{color:var(--danger)}
+.session-menu-item.is-danger:hover,
+.session-menu-item.is-danger:hover svg{background:var(--danger);color:var(--surface)}
+
+/* 编辑态：整行就是输入框本身，没有外层容器——一行的事犯不上两层边框 */
+.session-edit-input{width:100%;height:var(--session-row-h);border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:0 var(--space-3);color:var(--fg);font:inherit;font-size:var(--text-sm)}
+.session-edit-input:focus-visible{outline:none;box-shadow:var(--focus-ring);border-color:var(--border-soft)}
 .session-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
 
 /* 会话列收起后浮出的按钮组：贴着对话面板左缘、与面板顶部齐平。
@@ -124,10 +152,33 @@ body{
 .session-toggle{display:none}
 .session-overlay{display:none}
 
-.messages{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
+.messages{flex:1;min-height:0;overflow-y:auto;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4)}
 
-.message{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);background:var(--surface)}
-.message-label{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);margin-bottom:var(--space-2);letter-spacing:.04em}
+.message{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-4);background:var(--surface)}
+.message-label{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);margin-bottom:var(--space-2);letter-spacing:.04em}
+/* 答案上的「全屏」入口：与消息标签同行、靠右。悬浮或键盘聚焦时出现，和会话行同一套做法；
+   用 opacity 而不是 display，键盘仍然走得到它。 */
+.message-open{padding:0;border:0;background:transparent;color:var(--meta);font:inherit;font-size:var(--text-xs);letter-spacing:.04em;cursor:pointer;opacity:0;transition:opacity var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.message:hover .message-open,.message:focus-within .message-open{opacity:1}
+.message-open:hover{color:var(--fg)}
+.message-open:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+
+/* ── 集中阅读视图 ────────────────────────────────────────────────────
+   长答案用：整屏铺满，把顶栏、会话列表和面板内边距让出来换高度——正文列宽本
+   来就够（896 是阅读宽度，不该再宽），缺的是竖向空间。正文仍复用 .messages /
+   .message / .markdown-body / .citation，不另起一套排版。保留输入区：读完接着
+   问是这个产品的常态，切成只读反而打断环路。 */
+.focus-view{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;background:var(--bg);padding:var(--space-6) var(--container-gutter-desktop)}
+.focus-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--border)}
+.focus-head-main{display:flex;align-items:baseline;gap:var(--space-3);min-width:0}
+.focus-head-main h1{margin:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-close{flex:none;width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg-2);font-size:var(--text-base);line-height:1;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.focus-close:hover{background:var(--accent-hover);color:var(--fg)}
+.focus-close:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 滚动区直接复用 .messages：它已经在滚动条规则组里，不新增一套。 */
+.focus-view .messages{padding:var(--space-6) 0}
+.focus-doc{width:100%;max-width:var(--content-max);margin:0 auto}
+.focus-view .composer{width:100%;max-width:var(--content-max);margin:var(--space-4) auto 0}
 .message-body{font-size:var(--text-sm);line-height:var(--leading-body);white-space:pre-wrap}
 .message-user{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--accent-on);border-color:var(--border-soft)}
 .message-user .message-label{color:var(--fg-2)}
@@ -180,7 +231,7 @@ body{
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- 输入区 ---------- */
-.composer{margin:0 var(--space-6) var(--space-6);border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);transition:border-color var(--motion-fast) var(--ease-standard),box-shadow var(--motion-fast) var(--ease-standard)}
+.composer{margin:0 var(--space-4) var(--space-4);border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);transition:border-color var(--motion-fast) var(--ease-standard),box-shadow var(--motion-fast) var(--ease-standard)}
 .composer:focus-within{border-color:var(--border-soft);box-shadow:var(--focus-ring)}
 .composer textarea{width:100%;resize:vertical;min-height:52px;background:transparent;border:0;outline:0;color:var(--fg);font:inherit;font-size:var(--text-sm);line-height:var(--leading-body)}
 .composer textarea::placeholder{color:var(--meta)}
@@ -195,19 +246,46 @@ body{
 /* ---------- 弹窗 ---------- */
 .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-6);z-index:50}
 .modal-panel{width:min(560px,100%);max-height:86vh;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 12px 32px oklch(0 0 0 / 0.18)}
-.modal-header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:var(--space-5) var(--space-6) var(--space-3);border-bottom:1px solid var(--border)}
+/* 确认框：比配置弹窗窄——两个按钮的二次确认用不着 560。
+   不分隔线：内容只有三行，横线纯属噪音（配置弹窗保留，那里内容区长、要滚）。
+   线一去掉，头部那个 56px 的固定高也就没用了——它本来是给带线的头部做等高校准的，
+   留着只会把标题和说明拉开 31px。 */
+.modal-panel.is-confirm{width:min(var(--dialog-w),100%)}
+.modal-panel.is-confirm .modal-header{min-height:0;padding:var(--space-4) var(--space-4) var(--space-2);border-bottom:0}
+.modal-panel.is-confirm .modal-body{padding:0 var(--space-4) var(--space-4)}
+.modal-panel.is-confirm .modal-footer{padding:0 var(--space-4) var(--space-4);border-top:0}
+.confirm-text{margin:0;font-size:var(--text-sm);line-height:var(--leading-body);color:var(--fg-2)}
+.confirm-text b{color:var(--fg);font-weight:600}
+.confirm-hint{margin:var(--space-2) 0 0;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+.modal-footer-inner.is-end{justify-content:flex-end}
+.confirm-cancel,.confirm-delete{border-radius:var(--radius-md);padding:var(--space-2) var(--space-4);font:inherit;font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
+.confirm-cancel{border:1px solid var(--border);background:var(--surface);color:var(--fg)}
+.confirm-cancel:hover{background:var(--accent-hover);border-color:var(--border-soft)}
+/* 描边式危险按钮：--danger 对 --surface 在两种主题下都有 4.5:1 以上；
+   改成实心反而拿不到——浅色下要深字、深色下要浅字，一个 token 兼不了。 */
+.confirm-delete{border:1px solid var(--danger);background:transparent;color:var(--danger)}
+.confirm-delete:hover{background:var(--danger);color:var(--surface)}
+.confirm-cancel:focus-visible,.confirm-delete:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 三段横向内边距同为 16，标题 / 字段 / 底部按钮落在同一左对齐线上；
+   header 的 min-height 与应用内其它头部一致 */
+.modal-header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:var(--space-3) var(--space-4);min-height:56px;border-bottom:1px solid var(--border)}
 .modal-header h2{margin:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display)}
 .modal-close{border:1px solid var(--border);background:var(--surface);color:var(--fg-2);width:28px;height:28px;border-radius:var(--radius-sm);font-size:var(--text-base);line-height:1;cursor:pointer}
 .modal-close:hover{background:var(--accent-hover)}
-.modal-body{flex:1;min-height:0;overflow-y:auto;padding:var(--space-5) var(--space-6)}
+.modal-body{flex:1;min-height:0;overflow-y:auto;padding:var(--space-4)}
 
 /* ---------- 设置面板 ---------- */
 .settings-panel label{display:grid;gap:var(--space-2);margin-top:var(--space-4);color:var(--fg-2);font-size:var(--text-xs)}
 .settings-panel input{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);color:var(--fg);font:inherit;font-size:var(--text-sm)}
 .field-hint{color:var(--meta);font-size:var(--text-xs)}
+/* 模型分区的短字段两列排、长字段通栏；行距由 grid gap 提供，字段不再自带上下边距 */
+.settings-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4)}
+.settings-fields label{margin-top:0}
+.settings-fields .settings-span{grid-column:1 / -1}
 .save-button{margin-top:var(--space-5);width:100%;padding:var(--space-3)}
 .save-button:disabled{opacity:.45;cursor:not-allowed}
-.settings-note{margin-top:var(--space-6);padding-top:var(--space-4);border-top:1px solid var(--border);color:var(--meta);font-size:var(--text-xs);line-height:1.7}
+/* 说明块不带分隔线：它跟在分区标题之后，加线会孤零零挂在标题下 */
+.settings-note{color:var(--meta);font-size:var(--text-xs);line-height:1.7}
 .settings-note code{font-family:var(--font-mono);font-size:var(--text-xs);background:var(--surface-warm);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px 5px;color:var(--fg)}
 .settings-status{margin-top:var(--space-2);color:var(--fg-2)}
 
@@ -258,6 +336,9 @@ body{
 .settings-actions button:hover:not(:disabled){background:var(--accent-hover)}
 .settings-actions button:disabled{opacity:.45;cursor:not-allowed}
 .settings-actions button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 只读操作降为幽灵样式：它不改变任何状态，不该和有副作用的动作占同样的视觉重量 */
+.settings-actions .is-ghost{border-color:transparent;background:transparent;color:var(--fg-2)}
+.settings-actions .is-ghost:hover:not(:disabled){background:var(--accent-hover);color:var(--fg);border-color:transparent}
 
 /* ---------- 滚动条：默认隐藏，悬浮时才出现 ---------- */
 /* 覆盖所有可滚动区域：消息列表、会话列表、弹窗、代码块、宽表格 */
@@ -323,7 +404,7 @@ body{
 }
 
 /* ---------- 弹窗底部操作区（固定） ---------- */
-.modal-footer{flex:0 0 auto;padding:var(--space-4) var(--space-6);border-top:1px solid var(--border);background:var(--surface)}
+.modal-footer{flex:0 0 auto;padding:var(--space-4);border-top:1px solid var(--border);background:var(--surface)}
 .modal-footer-inner{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4)}
 .modal-footer .save-button{margin:0;width:auto;padding:var(--space-2) var(--space-5)}
 .modal-footer .settings-status{color:var(--fg-2);font-size:var(--text-xs)}

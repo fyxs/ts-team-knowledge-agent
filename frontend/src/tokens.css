@@ -93,13 +93,15 @@
    *               宽屏下按断点递增，避免两侧过度留白。
    * --session-panel-w 历史会话列宽度。
    * --content-max-sessions 含会话列时的主区域上限：会话列展开时主区域要额外
-   *               容纳一列，取它与 --content-max 的较大值，避免消息列被压窄。 */
+   *               容纳一列，取它与 --content-max 的较大值，避免消息列被压窄。
+   * --dialog-w  确认框宽度：配置弹窗那档 560 是给表单的，两个按钮的二次确认用不着。 */
   --overlay:                   oklch(0 0 0 / 0.28);
   --content-max:               var(--container-max);
   --content-max-wide:          1080px;
   --content-max-ultrawide:     1200px;
   --session-panel-w:           264px;
   --content-max-sessions:      1180px;
+  --dialog-w:                  400px;
 
   color-scheme: light;
 }

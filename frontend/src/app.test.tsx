@@ -57,6 +57,20 @@ function defaultHandler(url: string, init?: RequestInit): Response {
       const session = testSessions.find((item) => item.id === matched[1]) ?? null;
       return new Response(JSON.stringify({ session, messages: [] }), { status: 200 });
     }
+    const byId = url.match(/\/api\/v1\/sessions\/([^/]+)$/);
+    if (byId) {
+      if ((init?.method ?? "GET") === "PATCH") {
+        const body = init?.body ? (JSON.parse(String(init.body)) as { title?: string }) : {};
+        const current = testSessions.find((item) => item.id === byId[1]);
+        const updated = { id: byId[1], title: body.title ?? current?.title ?? "", updatedAt: Date.now() };
+        testSessions = testSessions.map((item) => (item.id === byId[1] ? updated : item));
+        return new Response(JSON.stringify(updated), { status: 200 });
+      }
+      if (init?.method === "DELETE") {
+        testSessions = testSessions.filter((item) => item.id !== byId[1]);
+        return new Response(JSON.stringify({ deleted: true, session_id: byId[1] }), { status: 200 });
+      }
+    }
     return new Response(JSON.stringify({ sessions: testSessions }), { status: 200 });
   }
   if (url.includes("/api/v1/run")) return new Response(JSON.stringify(RUN_STATUS), { status: 200 });
@@ -549,5 +563,139 @@ describe("agent chat shell", () => {
     expect(container?.querySelectorAll(".session-item").length).toBe(before + 1);
     // 快捷新建不该把用户刚收起来的面板又弹开
     expect(container?.querySelector(".app-shell")?.classList.contains("is-collapsed")).toBe(true);
+  });
+
+  it("renames a session inline: the menu opens the editor, the input takes focus, blur saves", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const row = container?.querySelectorAll(".session-row")[0] as HTMLElement;
+    await act(async () => {
+      (row.querySelector(".session-action") as HTMLButtonElement).click();
+    });
+    await flush();
+    await act(async () => {
+      (row.querySelector(".session-menu-item") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const input = container?.querySelector(".session-edit-input") as HTMLInputElement;
+    expect(input).not.toBeNull();
+    // 进入编辑即自动聚焦，不需要再点一下输入框
+    expect(document.activeElement).toBe(input);
+
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(input, "换个更短的名字");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      input.blur();
+    });
+    await flush();
+
+    expect(testSessions.find((session) => session.id === "s-env")?.title).toBe("换个更短的名字");
+    expect(container?.querySelector(".session-edit-input")).toBeNull();
+  });
+
+  it("falls back to the original title when the editor is emptied and blurred", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const row = container?.querySelectorAll(".session-row")[0] as HTMLElement;
+    await act(async () => {
+      (row.querySelector(".session-action") as HTMLButtonElement).click();
+    });
+    await flush();
+    await act(async () => {
+      (row.querySelector(".session-menu-item") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const input = container?.querySelector(".session-edit-input") as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(input, "   ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      input.blur();
+    });
+    await flush();
+
+    // 空标题没有意义：静默回退原名，不把空行留在列表里
+    expect(testSessions.find((session) => session.id === "s-env")?.title).toBe("前端编码规范里对环境变量有什么要求？");
+    expect(container?.querySelector(".session-edit-input")).toBeNull();
+  });
+
+  it("deletes a session through the confirm dialog", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const before = container?.querySelectorAll(".session-item").length ?? 0;
+    const row = container?.querySelectorAll(".session-row")[0] as HTMLElement;
+    await act(async () => {
+      (row.querySelector(".session-action") as HTMLButtonElement).click();
+    });
+    await flush();
+    await act(async () => {
+      (row.querySelector(".session-menu-item.is-danger") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    // 先弹确认框，并且点名删的是哪一条
+    expect(container?.querySelector(".modal-panel.is-confirm")).not.toBeNull();
+    expect(container?.querySelector(".confirm-text")?.textContent).toContain("前端编码规范里对环境变量有什么要求？");
+
+    await act(async () => {
+      (container?.querySelector(".confirm-delete") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    expect(container?.querySelectorAll(".session-item").length).toBe(before - 1);
+    expect(testSessions.some((session) => session.id === "s-env")).toBe(false);
+    expect(container?.querySelector(".modal-panel.is-confirm")).toBeNull();
+  });
+
+  it("creates a replacement session after deleting the last one", async () => {
+    testSessions = [BASE_SESSIONS[0]];
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const row = container?.querySelectorAll(".session-row")[0] as HTMLElement;
+    await act(async () => {
+      (row.querySelector(".session-action") as HTMLButtonElement).click();
+    });
+    await flush();
+    const deleteItem = Array.from(row.querySelectorAll<HTMLButtonElement>(".session-menu-item")).find((item) =>
+      item.textContent?.includes("删除"),
+    );
+    await act(async () => {
+      deleteItem?.click();
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".confirm-delete") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    // 删光后立刻补一个空会话，避免后续提问在服务端每条各建一个会话
+    expect(testSessions.length).toBe(1);
+    expect(testSessions[0].id).not.toBe("s-env");
+    expect(container?.querySelectorAll(".session-item").length).toBe(1);
   });
 });

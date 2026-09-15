@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
+import { Modal } from "./components/Modal";
 import { SessionDock } from "./components/SessionDock";
 import { SessionPanel } from "./components/SessionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -9,12 +10,29 @@ import { useSessions } from "./hooks/useSessions";
 import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
-  const { groups, total, activeId, query, setQuery, collapsed, createSession, selectSession, touchSession, refresh, collapse, expand } =
+  const { groups, total, activeId, query, setQuery, collapsed, createSession, selectSession, touchSession, renameSession, removeSession, refresh, collapse, expand } =
     useSessions();
   const { messages, busy, send, stop } = useAgentChat(activeId);
   const { theme, toggle } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  /** 待确认删除的会话 id。确认框放在 App 层：面板是 overflow:hidden，遮罩放里面会被裁掉。 */
+  const [pendingDeleteId, setPendingDeleteId] = useState("");
+
+  const pendingDelete = useMemo(() => {
+    if (pendingDeleteId === "") return null;
+    for (const group of groups) {
+      const session = group.items.find((item) => item.id === pendingDeleteId);
+      if (session) return session;
+    }
+    return null;
+  }, [groups, pendingDeleteId]);
+
+  const handleConfirmDelete = useCallback(() => {
+    const id = pendingDeleteId;
+    setPendingDeleteId("");
+    void removeSession(id);
+  }, [pendingDeleteId, removeSession]);
 
   const handleSend = useCallback(
     (question: string) => {
@@ -31,6 +49,13 @@ export default function App() {
     createSession();
     setSessionsOpen(false);
   }, [createSession]);
+
+  const handleRename = useCallback(
+    (id: string, title: string) => {
+      void renameSession(id, title);
+    },
+    [renameSession],
+  );
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -78,6 +103,8 @@ export default function App() {
           onSelect={handleSelect}
           onCreate={handleCreate}
           onCollapse={collapse}
+          onRename={handleRename}
+          onRequestDelete={setPendingDeleteId}
         />
 
         {collapsed && <SessionDock onExpand={expand} onCreate={handleCreate} />}
@@ -100,6 +127,29 @@ export default function App() {
       )}
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+
+      {pendingDelete && (
+        <Modal
+          confirm
+          title="删除会话"
+          onClose={() => setPendingDeleteId("")}
+          footer={
+            <div className="modal-footer-inner is-end">
+              <button type="button" className="confirm-cancel" onClick={() => setPendingDeleteId("")}>
+                取消
+              </button>
+              <button type="button" className="confirm-delete" onClick={handleConfirmDelete}>
+                删除
+              </button>
+            </div>
+          }
+        >
+          <p className="confirm-text">
+            <b>{pendingDelete.title}</b> 将被删除。
+          </p>
+          <p className="confirm-hint">会话保存在本机，删除后无法恢复。</p>
+        </Modal>
+      )}
     </main>
   );
 }
