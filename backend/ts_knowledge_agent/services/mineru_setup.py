@@ -20,6 +20,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_REQUIREMENT = "MinerU[pipeline]"
+# MinerU 3.4.5 的 OCR 链路 import six，但未声明该依赖；缺了会在真实转换时崩。
+# 这类"上游打包缺口"统一在这里补齐，并保持可扩展（--extra 可再加）。
+EXTRA_REQUIREMENTS = ("six",)
 ENV_DIRECTORY_NAME = "mineru-env"
 
 
@@ -134,14 +137,15 @@ def create_environment(env_dir: Path, bootstrap: list[str], *, dry_run: bool = F
                        "（若提示重解析点/不可访问，说明解释器目录被安全软件接管，请用 --python 指向可用解释器）")
 
 
-def install_mineru(env_dir: Path, bootstrap: list[str], requirement: str, *, dry_run: bool = False) -> list[str]:
+def install_mineru(env_dir: Path, bootstrap: list[str], requirement: str, *, extras: tuple[str, ...] = EXTRA_REQUIREMENTS,
+                   dry_run: bool = False) -> list[str]:
     """安装 MinerU；uv 与 pip 两种路径都支持。"""
 
     python = environment_python(env_dir) if env_dir.exists() else predicted_python(env_dir)
     if bootstrap and Path(bootstrap[0]).name.startswith("uv"):
-        command = [*bootstrap, "pip", "install", "--python", str(python), requirement]
+        command = [*bootstrap, "pip", "install", "--python", str(python), requirement, *extras]
     else:
-        command = [str(python), "-m", "pip", "install", requirement]
+        command = [str(python), "-m", "pip", "install", requirement, *extras]
     if dry_run:
         return [" ".join(command)]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -152,15 +156,24 @@ def install_mineru(env_dir: Path, bootstrap: list[str], requirement: str, *, dry
     return [" ".join(command)]
 
 
-def verify_mineru(python: Path, *, timeout: int = 600) -> tuple[bool, str | None]:
-    """自检：确认解释器能导入 mineru 与 torch，并回报版本。"""
+def verify_mineru(python: Path, *, timeout: int = 900) -> tuple[bool, str | None]:
+    """自检：基础导入 + 真实转换要走的 pipeline 链路。
 
-    probe = "import mineru, torch; print(getattr(mineru, '__version__', 'unknown'), torch.__version__)"
+    只 import mineru/torch 是不够的——MinerU 的 OCR 链路（pipeline_analyze）里
+    有未声明的可选依赖（如 six），只有把这层也导入进来才能提前暴露，
+    否则会在成员机第一次真实转换时才崩。
+    """
+
+    probe = (
+        "import mineru, torch\n"
+        "import mineru.backend.pipeline.pipeline_analyze as pa\n"
+        "print(getattr(mineru, '__version__', 'unknown'), torch.__version__, 'pipeline-ok')\n"
+    )
     result = subprocess.run([str(python), "-c", probe], capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=timeout)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip().splitlines()[-3:]
-        return False, " | ".join(detail) or "导入 mineru/torch 失败"
+        return False, " | ".join(detail) or "自检失败"
     return True, (result.stdout or "").strip()
 
 

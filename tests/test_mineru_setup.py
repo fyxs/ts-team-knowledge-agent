@@ -101,3 +101,35 @@ def test_verify_failure_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(mineru_setup.subprocess, "run", fake_run)
     ok, detail = verify_mineru(python)
     assert not ok and "torch" in (detail or "")
+
+def test_install_command_includes_upstream_gap_extras(monkeypatch, tmp_path):
+    """MinerU 未声明 six，但 OCR 链路需要它；安装命令必须带上补齐项。"""
+
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(mineru_setup.subprocess, "run", fake_run)
+    mineru_setup.install_mineru(tmp_path / "env", ["uv"], "MinerU[pipeline]")
+
+    assert "six" in captured["command"]
+    assert "MinerU[pipeline]" in captured["command"]
+
+
+def test_verify_probe_covers_pipeline_chain(monkeypatch, tmp_path):
+    """自检必须导入真实转换要走的 pipeline 链路，否则漏检未声明依赖。"""
+
+    python = tmp_path / "python.exe"
+    python.write_bytes(b"x")
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["probe"] = command[-1]
+        return subprocess.CompletedProcess(command, 0, "3.4.5 2.14.0 pipeline-ok", "")
+
+    monkeypatch.setattr(mineru_setup.subprocess, "run", fake_run)
+    ok, detail = mineru_setup.verify_mineru(python)
+
+    assert ok and "pipeline_analyze" in captured["probe"]
