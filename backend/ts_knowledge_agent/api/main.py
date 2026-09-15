@@ -19,6 +19,7 @@ from ts_knowledge_agent.agent.setup import mask_key
 from ts_knowledge_agent.adapters.git_sync import pull_repository, push_repository
 from ts_knowledge_agent.config import MIN_SCAN_INTERVAL_MINUTES, Settings
 from ts_knowledge_agent.services.scheduler import run_once_with_report
+from ts_knowledge_agent.services.usage import TraceCollector, append_trace
 
 app = FastAPI(title="TS Knowledge Agent", version="0.1.0")
 
@@ -144,7 +145,9 @@ def chat(request: ChatRequest) -> dict:
     settings = load_settings()
     provider = _provider(settings)
     steps = request.max_steps or settings.model_max_steps
-    result = run_agent(settings, question, provider, max_steps=steps)
+    collector = TraceCollector()
+    result = run_agent(settings, question, provider, max_steps=steps, on_event=collector)
+    append_trace(settings.working_directory, collector.to_record(settings.personal_workspace, "web"))
     return {
         "answer": result.answer,
         "citations": result.citations,
@@ -169,7 +172,14 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
 
         def worker() -> None:
             try:
-                run_agent(settings, question, provider, max_steps=steps, on_event=channel.put)
+                collector = TraceCollector()
+
+                def emit(event: dict) -> None:
+                    collector(event)
+                    channel.put(event)
+
+                run_agent(settings, question, provider, max_steps=steps, on_event=emit)
+                append_trace(settings.working_directory, collector.to_record(settings.personal_workspace, "web"))
             except Exception as exc:  # pragma: no cover - defensive
                 channel.put({"type": "error", "error": f"{type(exc).__name__}: {exc}"})
             finally:

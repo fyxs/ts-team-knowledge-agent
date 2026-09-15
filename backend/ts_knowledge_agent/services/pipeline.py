@@ -13,6 +13,7 @@ from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
 from ts_knowledge_agent.services.run_lock import RunLock
 from ts_knowledge_agent.services.quality import inspect_markdown_file
+from ts_knowledge_agent.services.usage import rollup_usage
 from ts_knowledge_agent.services.registries import export_review_records, write_knowledge_registry, write_source_registry
 
 @dataclass(frozen=True)
@@ -148,6 +149,7 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         indexed=index_converted(settings)
         write_source_registry(settings)
         write_knowledge_registry(settings)
+        rollup_usage(settings.working_directory, settings.shared_knowledge_repository_directory, settings.personal_workspace)
         export_review_records(settings)
         sync_status="disabled"
         if sync:

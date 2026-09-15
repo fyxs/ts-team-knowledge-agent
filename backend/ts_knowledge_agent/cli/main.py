@@ -36,6 +36,13 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.usage import (
+    TraceCollector,
+    append_trace,
+    question_candidates,
+    read_traces,
+    summarize,
+)
 from ts_knowledge_agent.services.evaluation import (
     DEFAULT_EVALUATION_INTERVAL_MINUTES,
     append_evaluation_run,
@@ -125,6 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--if-due", action="store_true", help="距上次巡检达到间隔时才执行")
     inspect.add_argument("--interval-minutes", type=int, default=DEFAULT_INSPECTION_INTERVAL_MINUTES)
     inspect.add_argument("--json", action="store_true")
+    usage = sub.add_parser("usage")
+    usage.add_argument("--days", type=int, default=7)
+    usage.add_argument("--suggest", action="store_true", help="输出评测题候选")
+    usage.add_argument("--json", action="store_true")
     evaluate = sub.add_parser("evaluate")
     evaluate.add_argument("--question-set", type=Path, default=None)
     evaluate.add_argument("--mode", choices=("retrieval", "citations", "both"), default="both")
@@ -299,7 +310,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 2
         max_steps = args.max_steps or settings.model_max_steps
-        result = run_agent(settings, args.question, provider, max_steps=max_steps)
+        collector = TraceCollector()
+        result = run_agent(settings, args.question, provider, max_steps=max_steps, on_event=collector)
+        append_trace(settings.working_directory, collector.to_record(settings.personal_workspace, "cli"))
         print(json.dumps({"answer": result.answer, "citations": result.citations, "steps": result.steps, "error": result.error, "prompt_version": result.prompt_version}, ensure_ascii=False, indent=2))
         return 1 if result.error else 0
     if args.command == "config":
@@ -360,6 +373,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"api key stored at {path} (never commit this file)")
             return 0
         parser.error("config requires an action: show | set | set-key")
+    if args.command == "usage":
+        records = read_traces(settings.working_directory, days=args.days)
+        summary = summarize(records)
+        if args.suggest:
+            summary["candidates"] = question_candidates(settings.working_directory)
+        if args.json:
+            _print(summary)
+        else:
+            print("traces=" + str(summary.get("traces", 0))
+                  + " zero_hit_rate=" + str(summary.get("zero_hit_rate", 0))
+                  + " citation_rate=" + str(summary.get("citation_rate", 0))
+                  + " avg_steps=" + str(summary.get("avg_steps", 0)))
+            for item in summary.get("top_zero_hit_queries", []):
+                print("  zero-hit x" + str(item["count"]) + ": " + str(item["query"]))
+            for item in summary.get("candidates", []):
+                print("  candidate[" + ",".join(item["reasons"]) + "]: " + item["question"][:60])
+        return 0
+
     if args.command == "evaluate":
         question_set = args.question_set or (Path(__file__).resolve().parents[3] / "evaluation" / "knowledge-questions.json")
         cases = load_cases(question_set)
