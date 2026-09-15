@@ -97,3 +97,15 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 - **报错要可读**：把每个失败命令与关键 stderr 一起抛出，并提示「若提示重解析点/不可访问，
   说明解释器目录被安全软件接管，请用 --python 指向可用解释器」。
 - 复用已有环境用 `--python <解释器>`；`--dry-run` 先看计划再执行。
+
+## 免安装包（exe）打包
+
+- **必须显式指定源码路径**：PyInstaller 的 spec 里 `pathex` 与 `datas` 要指向当前源码树
+  （构建脚本注入 `TS_KB_BUILD_BACKEND` / `TS_KB_BUILD_WEB`）。默认行为会从构建环境的
+  site-packages 取「已安装的旧包」，导致发布件里是陈旧代码——曾因此让 exe 缺少新命令，
+  而源码与测试都是好的，极易漏判。
+- **打包后必须验证发布件本身**：跑 `ts-team-kb.exe --help`，确认命令清单包含本次新增的命令；
+  再确认包内 `_internal/ts_knowledge_agent/web/` 有 index.html 与 assets。
+  只看「构建成功」不算通过。
+- **构建脚本要能一键复现**：`scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>`
+  产出 wheel 与免安装 zip；发布用 `scripts/publish-release.py`（默认 dry-run，上传后回读校验）。

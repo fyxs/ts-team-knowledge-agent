@@ -2,7 +2,9 @@
 # MinerU 及其重依赖（torch/transformers 等）在进程内从不 import（转换走独立解释器），
 # 因此这里显式排除，由首次运行或安装器单独制备。
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import os
+
+from PyInstaller.utils.hooks import collect_submodules
 
 hidden = [
     "uvicorn.logging",
@@ -23,11 +25,13 @@ excludes = [
 
 a = Analysis(
     ["entry.py"],
-    pathex=[],
+    # 关键：显式指向当前源码树，否则 PyInstaller 会从构建环境 site-packages 取
+    # 已安装的旧包，导致发布件里是陈旧代码（曾因此让 exe 缺少新命令）。
+    pathex=[os.environ.get("TS_KB_BUILD_BACKEND", "")],
     hiddenimports=hidden,
     excludes=excludes,
-    # 前端产物随包分发：成员机无需 Node
-    datas=collect_data_files("ts_knowledge_agent", includes=["web/*", "web/**/*"]),
+    # 前端产物随包分发：成员机无需 Node（由构建脚本指定路径）
+    datas=[(os.environ.get("TS_KB_BUILD_WEB", ""), "ts_knowledge_agent/web")],
 )
 pyz = PYZ(a.pure)
 exe = EXE(

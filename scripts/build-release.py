@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -67,10 +68,22 @@ def build_bundle(out_dir: Path, build_python: Path | None = None) -> Path:
         raise SystemExit(f"该解释器没有 PyInstaller：{interpreter}；请先 pip install -e .[build]")
     target = out_dir / 'packaging'
     target.mkdir(parents=True, exist_ok=True)
+    # 暂存源码树与前端产物：让打包用的是"当前源码"，不是构建环境里的旧安装
+    frontend_dist = PROJECT_ROOT / "frontend" / "dist"
+    if not (frontend_dist / "index.html").is_file():
+        raise SystemExit("前端产物缺失：发布包必须自带前端（先构建 frontend/dist）")
+    staging_root = Path(tempfile.mkdtemp(prefix="ts-kb-exe-"))
+    staging_backend = staging_root / "backend"
+    copy_tree(PROJECT_ROOT / "backend", staging_backend)
+    staging_web = staging_root / "web"
+    shutil.copytree(frontend_dist, staging_web)
+    build_env = dict(os.environ)
+    build_env["TS_KB_BUILD_BACKEND"] = str(staging_backend)
+    build_env["TS_KB_BUILD_WEB"] = str(staging_web)
     result = subprocess.run(
         [str(interpreter), '-m', 'PyInstaller', str(PROJECT_ROOT / 'packaging' / 'ts-team-kb.spec'),
          '--noconfirm', '--clean', '--distpath', str(target), '--workpath', str(out_dir / 'pyi-work')],
-        cwd=str(PROJECT_ROOT / 'packaging'), capture_output=True, text=True)
+        cwd=str(PROJECT_ROOT / 'packaging'), capture_output=True, text=True, env=build_env)
     if result.returncode != 0:
         print(result.stdout[-2000:])
         print(result.stderr[-2000:])
