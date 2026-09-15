@@ -56,3 +56,12 @@ def list_feedback(working_directory: Path) -> list[FeedbackRecord]:
             record.validate()
             records.append(record)
     return records
+
+
+def has_open_feedback(working_directory: Path, source_sha256: str, category: str) -> bool:
+    """避免同一版本、同一类别的问题在每轮重试里重复写入记录。"""
+
+    return any(
+        record.source_sha256 == source_sha256 and record.category == category and record.review_status != "resolved"
+        for record in list_feedback(working_directory)
+    )

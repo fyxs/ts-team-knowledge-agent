@@ -16,6 +16,18 @@ class GitSyncError(RuntimeError):
     pass
 
 
+STAGED_PATHS = ("members", "governance")
+"""随同步提交的顶层目录：成员知识与成员治理记录。"""
+
+
+def _stage(repo: Path) -> None:
+    """暂存已存在的受管目录，避免 pathspec 不存在时报错。"""
+
+    paths = [name for name in STAGED_PATHS if (repo / name).exists()]
+    if paths:
+        _git(repo, "add", *paths)
+
+
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -48,7 +60,7 @@ def commit_and_push(repo: Path, message: str) -> SyncResult:
         return SyncResult("not_initialized", message=str(repo))
     if not _git(repo, "status", "--porcelain"):
         return SyncResult("clean")
-    _git(repo, "add", "members")
+    _stage(repo)
     if not _git(repo, "diff", "--cached", "--name-only"):
         return SyncResult("clean")
     _git(repo, "commit", "-m", message)
@@ -70,7 +82,7 @@ def sync_repository(repo: Path, message: str) -> SyncResult:
         return SyncResult("not_initialized", message=str(repo))
     try:
         if _git(repo, "status", "--porcelain"):
-            _git(repo, "add", "members")
+            _stage(repo)
             if _git(repo, "diff", "--cached", "--name-only"):
                 _git(repo, "commit", "-m", message)
         _git(repo, "fetch", "origin")
@@ -104,3 +116,37 @@ def sync_repository(repo: Path, message: str) -> SyncResult:
     except GitSyncError as exc:
         return SyncResult("push_failed", commit=commit, message=str(exc))
     return SyncResult("pushed", commit=commit)
+
+
+def pull_repository(repo: Path) -> SyncResult:
+    """手动拉取共享知识仓：工作区干净时 fetch，落后则 rebase。"""
+    repo = repo.expanduser().resolve()
+    if not (repo / ".git").exists():
+        return SyncResult("not_initialized", message=str(repo))
+    if _git(repo, "status", "--porcelain"):
+        return SyncResult("blocked_dirty_worktree", message="local changes must be pushed or reverted first")
+    try:
+        _git(repo, "fetch", "origin")
+    except GitSyncError as exc:
+        return SyncResult("pull_failed", message=str(exc))
+    branch = _git(repo, "branch", "--show-current") or "main"
+    try:
+        behind = _git(repo, "rev-list", "--count", f"HEAD..origin/{branch}")
+    except GitSyncError:
+        behind = "0"
+    if behind == "0":
+        return SyncResult("up_to_date", commit=_git(repo, "rev-parse", "HEAD"))
+    try:
+        _git(repo, "rebase", f"origin/{branch}")
+    except GitSyncError as exc:
+        try:
+            _git(repo, "rebase", "--abort")
+        except GitSyncError:
+            pass
+        return SyncResult("blocked_conflict", message=str(exc))
+    return SyncResult("pulled", commit=_git(repo, "rev-parse", "HEAD"))
+
+
+def push_repository(repo: Path, message: str = "Manual sync from the web console") -> SyncResult:
+    """手动推送：提交本地成员内容后推送；远端有新提交时先 rebase。"""
+    return sync_repository(repo, message)

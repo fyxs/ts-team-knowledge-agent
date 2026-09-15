@@ -3,6 +3,12 @@ import sqlite3
 from pathlib import Path
 from ts_knowledge_agent.services.scanner import SourceFile
 
+SUCCESS_STATUSES = frozenset({"converted", "quality_warned"})
+"""已完成入库的状态；增量扫描据此跳过，不重复转换。"""
+
+WARNING_STATUSES = frozenset({"quality_warned"})
+"""已入库但带告警的状态；不计入失败。"""
+
 class StateStore:
     def __init__(self,path:Path)->None:
         self.path=path; self.path.parent.mkdir(parents=True,exist_ok=True); self.connection=sqlite3.connect(self.path); self.connection.row_factory=sqlite3.Row; self._init_schema()
@@ -13,6 +19,7 @@ class StateStore:
         """)
         columns={row[1] for row in self.connection.execute("PRAGMA table_info(conversions)")}
         if "reason" not in columns: self.connection.execute("ALTER TABLE conversions ADD COLUMN reason TEXT")
+        if "warning_message" not in columns: self.connection.execute("ALTER TABLE conversions ADD COLUMN warning_message TEXT")
         self.connection.commit()
     def upsert_source(self,source:SourceFile,status:str="discovered")->None:
         self.connection.execute("""INSERT INTO sources(relative_path,size,mtime_ns,sha256,status) VALUES(?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET size=excluded.size,mtime_ns=excluded.mtime_ns,sha256=excluded.sha256,status=CASE WHEN sources.sha256=excluded.sha256 THEN sources.status ELSE excluded.status END,updated_at=CURRENT_TIMESTAMP""",(source.relative_path,source.size,source.mtime_ns,source.sha256,status)); self.connection.commit()
@@ -34,11 +41,11 @@ class StateStore:
         row=self.connection.execute("SELECT source_sha256,status,output_path FROM conversions WHERE relative_path=?",(source.relative_path,)).fetchone()
         if row is None: return "new_source"
         if row["source_sha256"]!=source.sha256: return "source_changed"
-        if row["status"]!="converted": return "previous_failed"
+        if row["status"] not in SUCCESS_STATUSES: return "previous_failed"
         if not Path(row["output_path"]).is_file(): return "output_missing"
         return "unchanged"
     def needs_conversion(self,source:SourceFile)->bool: return self.conversion_reason(source)!="unchanged"
-    def record_conversion(self,relative_path:str,source_sha256:str,output_path:Path,converter_version:str,status:str,error_message:str|None=None,reason:str|None=None)->None:
-        self.connection.execute("""INSERT INTO conversions(relative_path,source_sha256,output_path,converter_version,status,error_message,reason) VALUES(?,?,?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET source_sha256=excluded.source_sha256,output_path=excluded.output_path,converter_version=excluded.converter_version,status=excluded.status,error_message=excluded.error_message,reason=excluded.reason,updated_at=CURRENT_TIMESTAMP""",(relative_path,source_sha256,str(output_path),converter_version,status,error_message,reason)); self.connection.commit()
+    def record_conversion(self,relative_path:str,source_sha256:str,output_path:Path,converter_version:str,status:str,error_message:str|None=None,reason:str|None=None,warning_message:str|None=None)->None:
+        self.connection.execute("""INSERT INTO conversions(relative_path,source_sha256,output_path,converter_version,status,error_message,reason,warning_message) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET source_sha256=excluded.source_sha256,output_path=excluded.output_path,converter_version=excluded.converter_version,status=excluded.status,error_message=excluded.error_message,reason=excluded.reason,warning_message=excluded.warning_message,updated_at=CURRENT_TIMESTAMP""",(relative_path,source_sha256,str(output_path),converter_version,status,error_message,reason,warning_message)); self.connection.commit()
     def list_conversions(self)->list[sqlite3.Row]: return list(self.connection.execute("SELECT * FROM conversions ORDER BY relative_path"))
     def close(self)->None: self.connection.close()

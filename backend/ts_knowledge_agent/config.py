@@ -6,8 +6,11 @@ import os
 from pathlib import Path
 import subprocess
 
+from ts_knowledge_agent.services.member_space import ensure_member_space
+
 DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL = "git@github.com:fyxs/ts-team-knowledge-base.git"
 DEFAULT_SCAN_INTERVAL_MINUTES = 60
+MIN_SCAN_INTERVAL_MINUTES = 5
 
 
 def parse_interval_minutes(value: str | None) -> int:
@@ -17,8 +20,8 @@ def parse_interval_minutes(value: str | None) -> int:
         minutes = int(value)
     except ValueError as exc:
         raise ValueError("scan interval must be an integer number of minutes") from exc
-    if minutes < 1:
-        raise ValueError("scan interval must be at least 1 minute")
+    if minutes < MIN_SCAN_INTERVAL_MINUTES:
+        raise ValueError(f"scan interval must be at least {MIN_SCAN_INTERVAL_MINUTES} minutes")
     return minutes
 
 
@@ -32,13 +35,19 @@ class Settings:
     shared_knowledge_repository_url: str = DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL
     mineru_python: Path | None = None
     sync_on_schedule: bool = True
+    model_provider: str = ""
+    model_name: str = ""
+    model_base_url: str = ""
+    model_max_tokens: int = 4096
+    model_max_steps: int = 8
+    excluded_source_paths: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
         working_directory = Path(os.getenv("TS_KB_WORKING_DIRECTORY", ".local")).expanduser()
         config_path = Path(os.getenv("TS_KB_CONFIG", str(working_directory / "ts-kb.json"))).expanduser()
         if not config_path.is_file():
-            raise FileNotFoundError(f"configuration file not found: {config_path}; run ts-kb init first")
+            raise FileNotFoundError(f"configuration file not found: {config_path}; run ts-team-kb init first")
         return cls.from_file(config_path)
 
     @classmethod
@@ -58,6 +67,14 @@ class Settings:
             shared_knowledge_repository_url=str(data.get("shared_knowledge_repository_url", DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)).strip() or DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL,
             mineru_python=Path(data["mineru_python"]).expanduser() if str(data.get("mineru_python", "")).strip() else None,
             sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
+            model_provider=str(data.get("model_provider", "")).strip(),
+            model_name=str(data.get("model_name", "")).strip(),
+            model_base_url=str(data.get("model_base_url", "")).strip(),
+            model_max_tokens=int(data.get("model_max_tokens", 4096) or 4096),
+            model_max_steps=int(data.get("model_max_steps", 8) or 8),
+            excluded_source_paths=tuple(
+                str(item).strip() for item in (data.get("excluded_source_paths") or []) if str(item).strip()
+            ),
         )
 
     def write_file(self, path: Path) -> None:
@@ -71,6 +88,12 @@ class Settings:
             "shared_knowledge_repository_url": self.shared_knowledge_repository_url,
             "mineru_python": str(self.mineru_python) if self.mineru_python else "",
             "sync_on_schedule": self.sync_on_schedule,
+            "model_provider": self.model_provider,
+            "model_name": self.model_name,
+            "model_base_url": self.model_base_url,
+            "model_max_tokens": self.model_max_tokens,
+            "model_max_steps": self.model_max_steps,
+            "excluded_source_paths": list(self.excluded_source_paths),
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -106,3 +129,4 @@ def initialize_working_directory(settings: Settings) -> None:
         raise RuntimeError("failed to write configuration file")
     if not (settings.shared_knowledge_repository_directory / ".git").is_dir():
         raise RuntimeError("shared knowledge repository was not initialized")
+    ensure_member_space(settings.shared_knowledge_repository_directory, settings.personal_workspace)

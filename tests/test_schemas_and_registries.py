@@ -4,6 +4,7 @@ from pathlib import Path
 from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.schemas import KnowledgeEntry, ReviewRecord, SourceRegistration, write_schema_files
+from ts_knowledge_agent.services.feedback import FeedbackRecord, append_feedback
 from ts_knowledge_agent.services.registries import (
     export_review_records,
     knowledge_entries,
@@ -31,7 +32,7 @@ def _seed_conversion(settings: Settings, relative="文档.pdf", status="converte
         store.connection.commit()
         output = member_root(settings) / "文档" / "文档.md"
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text("# 文档\n\n可用的知识内容，长度足够用于校验。\n", encoding="utf-8")
+        output.write_text("# 文档\n\n可用的知识内容，长度足够用于质量检查。\n", encoding="utf-8")
         store.record_conversion(relative, SHA, output, "mineru-3.4.5", status)
     finally:
         store.close()
@@ -83,25 +84,24 @@ def test_knowledge_registry_lists_documents_with_provenance(tmp_path):
 
 def test_review_export_never_leaks_local_absolute_paths(tmp_path):
     settings = _settings(tmp_path)
-    feedback = settings.working_directory / "feedback"
-    feedback.mkdir(parents=True, exist_ok=True)
     outside = tmp_path / "elsewhere" / "doc.md"
-    (feedback / "records.jsonl").write_text(
-        json.dumps(
-            {
-                "source_relative_path": "文档.pdf",
-                "source_sha256": SHA,
-                "output_path": str(outside),
-                "issue_category": "encoding",
-                "observed_issue": "出现替换字符",
-                "expected_result": "中文可读",
-                "resolution_status": "open",
-                "created_at": "2026-09-14T00:00:00+00:00",
-            },
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
+    append_feedback(
+        settings.working_directory,
+        FeedbackRecord(
+            source_relative_path="文档.pdf",
+            source_sha256=SHA,
+            file_type=".pdf",
+            converter="secret-scan",
+            converter_version="mineru-3.4.5",
+            output_path=str(outside),
+            category="encoding",
+            description="出现替换字符",
+            expected="中文可读",
+            source_issue=True,
+            adapter_issue=False,
+            resolution="open",
+            review_status="open",
+        ),
     )
 
     export_review_records(settings)
@@ -110,7 +110,7 @@ def test_review_export_never_leaks_local_absolute_paths(tmp_path):
     assert str(tmp_path) not in raw
     record = ReviewRecord(**json.loads(raw.strip()))
     assert record.knowledge_path == ""
-    assert record.issue_category == "encoding"
+    assert record.category == "encoding"
 
 
 def test_registry_is_stable_when_nothing_changed(tmp_path):

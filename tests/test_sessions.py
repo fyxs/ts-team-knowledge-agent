@@ -1,0 +1,128 @@
+from pathlib import Path
+
+from ts_knowledge_agent.services.sessions import (
+    DEFAULT_TITLE,
+    TITLE_LIMIT,
+    SessionStore,
+    session_title_from,
+)
+
+
+def _store(tmp_path: Path) -> SessionStore:
+    return SessionStore(tmp_path / "sessions.sqlite3")
+
+
+def test_create_then_list_orders_by_activity(tmp_path):
+    store = _store(tmp_path)
+    first = store.create_session("会话一")
+    second = store.create_session("会话二")
+    store.touch_session(first.id)
+    listed = store.list_sessions()
+    assert [item.id for item in listed][0] == first.id
+    assert {item.id for item in listed} == {first.id, second.id}
+    store.close()
+
+
+def test_messages_round_trip_keeps_citations_and_steps(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("问句")
+    store.append_message(session.id, "user", {"content": "问句"})
+    store.append_message(
+        session.id,
+        "process",
+        {"steps": [{"name": "knowledge_search", "detail": "空调群控", "status": "done"}], "running": False},
+    )
+    store.append_message(
+        session.id,
+        "answer",
+        {"content": "回答", "citations": ["members/whm/a.md"], "steps": 2, "retrieved": True},
+    )
+    messages = store.list_messages(session.id)
+    assert [item["kind"] for item in messages] == ["user", "process", "answer"]
+    assert messages[2]["citations"] == ["members/whm/a.md"]
+    assert messages[1]["steps"][0]["name"] == "knowledge_search"
+    store.close()
+
+
+def test_ensure_session_reuses_existing_and_backfills_title(tmp_path):
+    store = _store(tmp_path)
+    created = store.create_session(DEFAULT_TITLE)
+    reused = store.ensure_session(created.id, "新问题")
+    assert reused.id == created.id
+    assert store.get_session(created.id).title == session_title_from("新问题")
+    fresh = store.ensure_session(None, "另一个问题")
+    assert fresh.id != created.id
+    store.close()
+
+
+def test_delete_session_removes_messages(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("待删除")
+    store.append_message(session.id, "user", {"content": "内容"})
+    store.delete_session(session.id)
+    assert store.get_session(session.id) is None
+    assert store.list_messages(session.id) == []
+    store.close()
+
+
+def test_title_truncates_and_collapses_whitespace():
+    assert session_title_from("  多  空格   问题  ") == "多 空格 问题"
+    assert len(session_title_from("字" * 80)) == TITLE_LIMIT
+    assert session_title_from("") == DEFAULT_TITLE
+
+def test_rename_truncates_to_title_limit(tmp_path):
+    from ts_knowledge_agent.services.sessions import TITLE_LIMIT
+
+    store = _store(tmp_path)
+    session = store.create_session("原始标题")
+    store.rename_session(session.id, "这是一个非常非常长的会话标题它应当被截断到上限之内再保存")
+    renamed = store.get_session(session.id)
+    assert renamed is not None
+    assert len(renamed.title) <= TITLE_LIMIT
+    store.close()
+
+
+def test_delete_session_removes_messages(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("待删除")
+    store.append_message(session.id, "user", {"content": "问"})
+    store.delete_session(session.id)
+    assert store.get_session(session.id) is None
+    assert store.list_messages(session.id) == []
+    store.close()
+
+
+def test_search_messages_matches_history_content(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("配置排查")
+    store.append_message(session.id, "user", {"content": "BFF 项目新起需要改哪些配置？"})
+    store.append_message(session.id, "answer", {"content": "需要改数据库连接、模型网关与共享仓地址。"})
+    store.append_message(session.id, "process", {"steps": [{"name": "knowledge_search"}]})
+
+    hits = store.search_messages("模型网关")
+
+    assert hits and hits[0]["session_id"] == session.id
+    assert "模型网关" in hits[0]["snippet"]
+
+
+def test_search_messages_skips_tool_steps_and_other_sessions(tmp_path):
+    store = _store(tmp_path)
+    first = store.create_session("第一条")
+    second = store.create_session("第二条")
+    store.append_message(first.id, "answer", {"content": "这里提到网关配置"})
+    store.append_message(second.id, "process", {"steps": [{"name": "knowledge_search", "detail": "网关配置"}]})
+
+    hits = store.search_messages("网关")
+
+    assert [hit["session_id"] for hit in hits] == [first.id]
+
+
+def test_search_messages_drops_hits_after_session_delete(tmp_path):
+    store = _store(tmp_path)
+    session = store.create_session("待删除")
+    store.append_message(session.id, "answer", {"content": "独占关键词：哈密瓜"})
+    assert store.search_messages("哈密瓜")
+
+    store.delete_session(session.id)
+
+    assert store.search_messages("哈密瓜") == []

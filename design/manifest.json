@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "od-design-system-project/v1",
+  "id": "chatbot",
+  "name": "Chatbot",
+  "category": "Imported",
+  "description": "Extracted from local project chatbot.",
+  "source": {
+    "type": "local",
+    "path": "D:\\2Work\\OpenProjects\\chatbot",
+    "importedAt": "2026-09-14T05:47:23.257Z"
+  },
+  "files": {
+    "design": "DESIGN.md",
+    "tokens": "tokens.css",
+    "designTokens": "design-tokens.json",
+    "tailwind": "tailwind-v4.css",
+    "components": "components.html"
+  },
+  "usage": "USAGE.md",
+  "componentsManifest": "components.manifest.json",
+  "importMode": "hybrid",
+  "craft": {
+    "applies": [],
+    "suggested": [
+      "color"
+    ],
+    "exemptions": []
+  },
+  "preview": {
+    "dir": "preview",
+    "pages": [
+      {
+        "path": "preview/colors.html",
+        "role": "colors",
+        "title": "Colors"
+      },
+      {
+        "path": "preview/typography.html",
+        "role": "typography",
+        "title": "Typography"
+      },
+      {
+        "path": "preview/spacing.html",
+        "role": "spacing",
+        "title": "Spacing"
+      },
+      {
+        "path": "preview/components-buttons.html",
+        "role": "buttons",
+        "title": "Buttons"
+      },
+      {
+        "path": "preview/components-inputs.html",
+        "role": "inputs",
+        "title": "Inputs"
+      },
+      {
+        "path": "preview/app.html",
+        "role": "app",
+        "title": "App Preview"
+      }
+    ]
+  },
+  "sourceFiles": {
+    "scanned": "source/scanned-files.json",
+    "evidence": "source/evidence.md",
+    "tokens": "source/tokens.source.json",
+    "report": "source/token-contract.report.json",
+    "snippets": "source/snippets/INDEX.json"
+  }
+}
