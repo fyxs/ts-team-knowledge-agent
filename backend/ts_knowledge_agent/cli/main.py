@@ -275,7 +275,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "convert":
         source = args.file.expanduser().resolve()
         output = args.output or settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace / source.stem / f"{source.stem}.md"
-        result = convert_file(source, output)
+        # MinerU 类型必须先配置解释器；缺配置时给出可操作提示，而不是抛底层异常
+        if settings.mineru_python is None and source.suffix.lower() in {".pdf", ".docx", ".pptx"}:
+            print("需要 MinerU 才能转换该格式：请先执行 ts-team-kb setup-mineru，"
+                  "或用 ts-team-kb config set --mineru-python <解释器>")
+            return 1
+        result = convert_file(source, output, mineru_python=settings.mineru_python)
         print(f"converted={result.output_path} bytes={result.bytes_written}")
         return 0
 
