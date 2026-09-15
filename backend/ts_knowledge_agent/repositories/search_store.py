@@ -39,6 +39,24 @@ def clean_text(value: str) -> str:
     return value.lstrip("\ufeff")
 
 
+CJK_RUN = re.compile(r"[\u4e00-\u9fff]+")
+
+
+def expanded_tokens(text: str) -> list[str]:
+    """词元 + 中文二元片段。
+
+    没有中文分词器时，长句会被当成一个词元而无法召回；
+    补上相邻二元片段后，FTS 至少能按片段匹配，配合 bm25 排序即可找回目标文档。
+    """
+
+    tokens = query_tokens(text)
+    extras: list[str] = []
+    for token in tokens:
+        if CJK_RUN.fullmatch(token) and len(token) > 2:
+            extras.extend(token[index:index + 2] for index in range(len(token) - 1))
+    return list(dict.fromkeys(tokens + extras))
+
+
 class SearchStore:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -147,7 +165,7 @@ class SearchStore:
             return []
         channels = [
             self._match(fts_query(tokens, "and"), limit * 3),
-            self._match(fts_query(tokens, "or"), limit * 3),
+            self._match(fts_query(expanded_tokens(query), "or"), limit * 3),
             self._path_hits(tokens, limit * 3),
         ]
         return self._fuse(channels, limit)
