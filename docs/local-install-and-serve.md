@@ -182,6 +182,26 @@ Enable-ScheduledTask  -TaskName 'TSKnowledgeAgentScheduler'
 
 > 注：exe 与 pipx 两条路线的差异仅在此处——exe 拿不到进程外的大依赖，pip 装则天然带全。
 
+
+**验收记录（2026-09-15，干净目录演练，只用 release zip）**
+
+```text
+解压         99 个文件，含 ts-team-kb.exe
+setup-mineru 复用已备环境；深自检通过：torch 2.14.0+cpu pipeline-ok
+真实转换     PDF 40,343B → Markdown 16,175B / 6,410 字符，正文含中文标题与内容，另抽出 2 张图
+界面         首页 200（777 字符，来自包内前端产物）· /health 200
+关键点       全程不碰源码目录；在 C:\tmp 下完成
+```
+
+已知依赖缺口（已由 setup-mineru 自动补齐）：MinerU 3.4.5 的 OCR 链路 `import six`，
+但它没有把 six 声明为依赖；不补会在第一次真实转换时才崩。因此：
+
+```text
+· setup-mineru 安装时会一并装上 six（见 EXTRA_REQUIREMENTS，可扩展）
+· 自检不只看 import mineru / torch，还会导入 mineru.backend.pipeline.pipeline_analyze
+  这条真实转换链路 —— 只做浅自检会漏掉这类未声明依赖
+```
+
 ## 权限与安全边界
 
 ```text

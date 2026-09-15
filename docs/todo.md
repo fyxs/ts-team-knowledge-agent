@@ -148,6 +148,11 @@ C. 加共享口令    一次输入、前端存本地，同事仍可用（折中�
 ## 六、已决策（存档）
 
 ```text
+· 免安装包（exe）分发已完成（2026-09-15）
+  zip + GitHub Release 资源；配套 setup-mineru 制备 MinerU；
+  干净目录演练一次通过（解压 → 制备 → 真实 PDF 转换 → 界面 200）
+  过程中修掉三个产品级缺陷：打包取到旧源码、convert 漏传 MinerU 解释器、
+  MinerU 未声明依赖 six 导致首次转换必崩
 · MinerU 制备命令已完成（2026-09-15）：ts-team-kb setup-mineru
   建环境 → 安装 MinerU[pipeline] → 自检 → 写 mineru_python；支持 --python 复用与 --dry-run
 · 安装方式以 exe 为先（2026-09-15 用户决定）
