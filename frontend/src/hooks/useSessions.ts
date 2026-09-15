@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { SESSIONS_SEED, type SessionSummary } from "../api/sessions";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createSession as createSessionRequest, listSessions, type SessionSummary } from "../api/sessions";
 
 /** 会话标题上限；超出部分截断，避免超长问题把列表行撑开。 */
 const TITLE_MAX = 40;
@@ -17,8 +17,6 @@ export type SessionGroup = {
   label: string;
   items: SessionListItem[];
 };
-
-let seq = 0;
 
 function startOfDay(timestamp: number): number {
   const date = new Date(timestamp);
@@ -62,8 +60,8 @@ function buildGroups(sessions: SessionSummary[]): SessionGroup[] {
 
 /** 历史会话列表状态：选中、搜索、新建、折叠，以及会话元信息的就地更新。 */
 export function useSessions() {
-  const [sessions, setSessions] = useState<SessionSummary[]>(SESSIONS_SEED);
-  const [activeId, setActiveId] = useState<string>(SESSIONS_SEED[0]?.id ?? "");
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [activeId, setActiveId] = useState<string>("");
   const [query, setQuery] = useState("");
   /** 宽屏下收起会话列，把宽度让回对话面板；窄屏的抽屉开关另由 sessionsOpen 管理。 */
   const [collapsed, setCollapsed] = useState(false);
@@ -77,15 +75,40 @@ export function useSessions() {
     return buildGroups(matched);
   }, [sessions, query]);
 
-  const createSession = useCallback(() => {
-    seq += 1;
-    const session: SessionSummary = {
-      id: `session-${Date.now().toString(36)}-${seq}`,
-      title: PLACEHOLDER_TITLE,
-      updatedAt: Date.now(),
+  /** 重新拉取会话列表：一轮问答结束后调用，同步标题与活动时间。 */
+  const refresh = useCallback(async () => {
+    const items = await listSessions();
+    setSessions(items);
+    setActiveId((current) => (current && items.some((item) => item.id === current) ? current : items[0]?.id ?? ""));
+    return items;
+  }, []);
+
+  // 首次进入：拉取本机会话列表；一条都没有时创建一个空会话，避免界面停在无会话态。
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        let items = await listSessions();
+        if (items.length === 0) {
+          const created = await createSessionRequest();
+          items = [created];
+        }
+        if (cancelled) return;
+        setSessions(items);
+        setActiveId(items[0]?.id ?? "");
+      } catch {
+        // 接口不可用时保持空列表：面板显示空态，不伪造历史会话。
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    setSessions((current) => [session, ...current]);
-    setActiveId(session.id);
+  }, []);
+
+  const createSession = useCallback(async () => {
+    const created = await createSessionRequest();
+    setSessions((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+    setActiveId(created.id);
     setQuery("");
   }, []);
 
@@ -93,7 +116,7 @@ export function useSessions() {
     setActiveId(id);
   }, []);
 
-  /** 会话产生新消息时调用：刷新活动时间，并在首次提问后把占位标题换成问题。 */
+  /** 会话产生新消息时调用：就地刷新活动时间；标题以服务端为准，随后由 refresh 校正。 */
   const touchSession = useCallback((id: string, question?: string) => {
     const title = question?.trim().replace(/\s+/g, " ");
     setSessions((current) =>
@@ -126,6 +149,7 @@ export function useSessions() {
     createSession,
     selectSession,
     touchSession,
+    refresh,
     collapse,
     expand,
   };

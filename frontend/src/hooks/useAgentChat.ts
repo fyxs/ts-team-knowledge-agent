@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamQuestion, type AgentEvent } from "../api/agent";
+import { fetchSessionMessages, type StoredMessage } from "../api/sessions";
 
 export type ToolStep = {
   name: string;
@@ -21,6 +22,49 @@ const TOOL_LABELS: Record<string, string> = {
   knowledge_status: "查看知识库状态",
   load_skill: "加载技能",
 };
+
+/** 把服务端保存的消息映射为界面消息；历史 id 取负数避免与实时消息的自增 id 冲突。 */
+function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
+  const result: ChatMessage[] = [];
+  for (const item of stored) {
+    if (item.kind === "user") {
+      result.push({ kind: "user", id: -item.id, content: item.content ?? "" });
+      continue;
+    }
+    if (item.kind === "answer") {
+      result.push({
+        kind: "answer",
+        id: -item.id,
+        content: item.content ?? "",
+        citations: item.citations ?? [],
+        steps: typeof item.steps === "number" ? item.steps : 0,
+        durationMs: 0,
+        retrieved: item.retrieved !== false,
+      });
+      continue;
+    }
+    if (item.kind === "error") {
+      result.push({ kind: "error", id: -item.id, message: item.message ?? "回答失败" });
+      continue;
+    }
+    if (item.kind === "process") {
+      const steps = Array.isArray(item.steps) ? item.steps : [];
+      result.push({
+        kind: "process",
+        id: -item.id,
+        steps: steps.map((step) => ({
+          name: step.name,
+          label: TOOL_LABELS[step.name] ?? step.name,
+          detail: step.detail,
+          status: "done" as const,
+        })),
+        running: false,
+        startedAt: 0,
+      });
+    }
+  }
+  return result;
+}
 
 function describe(event: Extract<AgentEvent, { type: "tool_call" }>): string {
   const label = TOOL_LABELS[event.name] ?? event.name;
@@ -46,6 +90,26 @@ export function useAgentChat(sessionId: string) {
   const startedAtRef = useRef(0);
 
   const messages = messagesBySession[sessionId] ?? EMPTY_MESSAGES;
+  const hydratedRef = useRef<Set<string>>(new Set());
+
+  // 切换会话时按需拉取一次历史；已加载过的会话不再覆盖，避免抹掉在途或刚产生的消息。
+  useEffect(() => {
+    if (!sessionId || hydratedRef.current.has(sessionId)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stored = await fetchSessionMessages(sessionId);
+        if (cancelled) return;
+        hydratedRef.current.add(sessionId);
+        setMessagesBySession((current) => ({ ...current, [sessionId]: toChatMessages(stored.messages) }));
+      } catch {
+        // 历史加载失败不阻塞提问：保持空记录，用户继续提问即可。
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   const append = useCallback((target: string, message: ChatMessage) => {
     setMessagesBySession((current) => ({
@@ -135,7 +199,7 @@ export function useAgentChat(sessionId: string) {
       abortRef.current = controller;
       let activeProcessId: number | null = null;
       try {
-        await streamQuestion(trimmed, (event) => handleEvent(target, event), controller.signal);
+        await streamQuestion(trimmed, target, (event) => handleEvent(target, event), controller.signal);
       } catch (error) {
         const aborted = error instanceof DOMException && error.name === "AbortError";
         activeProcessId = processIdRef.current;

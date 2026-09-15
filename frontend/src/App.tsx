@@ -9,7 +9,7 @@ import { useSessions } from "./hooks/useSessions";
 import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
-  const { groups, total, activeId, query, setQuery, collapsed, createSession, selectSession, touchSession, collapse, expand } =
+  const { groups, total, activeId, query, setQuery, collapsed, createSession, selectSession, touchSession, refresh, collapse, expand } =
     useSessions();
   const { messages, busy, send, stop } = useAgentChat(activeId);
   const { theme, toggle } = useTheme();
@@ -19,9 +19,12 @@ export default function App() {
   const handleSend = useCallback(
     (question: string) => {
       touchSession(activeId, question);
-      void send(question);
+      void send(question).finally(() => {
+        // 一轮结束后刷新列表：服务端会据首条提问生成标题并更新活动时间。
+        void refresh();
+      });
     },
-    [activeId, send, touchSession],
+    [activeId, send, touchSession, refresh],
   );
 
   const handleCreate = useCallback(() => {

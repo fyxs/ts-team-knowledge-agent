@@ -2,7 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "./App";
-import { SESSIONS_SEED } from "./api/sessions";
+/** 会话接口的测试替身：默认 7 条历史会话，POST 时追加一条新会话。 */
+const BASE_SESSIONS = [
+  { id: "s-env", title: "前端编码规范里对环境变量有什么要求？", updatedAt: Date.now() - 24 * 60_000 },
+  { id: "s-components", title: "团队移动端组件库的架构是怎样的？", updatedAt: Date.now() - 3 * 60 * 60_000 },
+  { id: "s-mineru", title: "MinerU 转换失败有哪些可重试的情况", updatedAt: Date.now() - 26 * 60 * 60_000 },
+  { id: "s-repo", title: "共享知识仓的拉取与推送流程", updatedAt: Date.now() - 30 * 60 * 60_000 },
+  { id: "s-scan", title: "扫描间隔与计划任务怎么配", updatedAt: Date.now() - 3 * 24 * 60 * 60_000 },
+  { id: "s-citation", title: "引用来源为空是怎么回事", updatedAt: Date.now() - 4 * 24 * 60 * 60_000 },
+  { id: "s-gate", title: "转换质量门禁的判定标准", updatedAt: Date.now() - 12 * 24 * 60 * 60_000 },
+];
+
+let testSessions = [...BASE_SESSIONS];
+let createdSessions = 0;
 
 // React 18 在测试环境需要显式声明，否则状态更新不会同步刷新。
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,6 +33,32 @@ const RUN_STATUS = { running: false, started_at: null, last: null, report: null 
 
 /** 默认路由：配置、运行状态；其余按用例覆写。 */
 function defaultHandler(url: string, init?: RequestInit): Response {
+  // 与后端一致：问答流结束时首条提问会成为会话标题，前端刷新列表后以服务端为准。
+  if (url.includes("/api/v1/chat/stream")) {
+    const body = init?.body ? (JSON.parse(String(init.body)) as { question?: string; session_id?: string }) : {};
+    const session = testSessions.find((item) => item.id === body.session_id);
+    if (session && session.title === "新会话" && body.question) {
+      session.title = body.question.slice(0, 40);
+    }
+    return sseResponse([
+      'data: {"type":"start","question":"q"}\n\n',
+      'data: {"type":"answer","content":"好的","citations":[],"steps":1,"retrieved":true}\n\n',
+    ]);
+  }
+  if (url.includes("/api/v1/sessions")) {
+    if ((init?.method ?? "GET") === "POST") {
+      createdSessions += 1;
+      const session = { id: `s-created-${createdSessions}`, title: "新会话", updatedAt: Date.now() };
+      testSessions = [session, ...testSessions];
+      return new Response(JSON.stringify(session), { status: 200 });
+    }
+    const matched = url.match(/\/api\/v1\/sessions\/([^/]+)\/messages$/);
+    if (matched) {
+      const session = testSessions.find((item) => item.id === matched[1]) ?? null;
+      return new Response(JSON.stringify({ session, messages: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ sessions: testSessions }), { status: 200 });
+  }
   if (url.includes("/api/v1/run")) return new Response(JSON.stringify(RUN_STATUS), { status: 200 });
   if (url.includes("/api/v1/config")) return new Response(JSON.stringify(CONFIG), { status: 200 });
   return new Response("{}", { status: 200 });
@@ -55,6 +93,8 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 beforeEach(() => {
+  testSessions = [...BASE_SESSIONS];
+  createdSessions = 0;
   localStorage.clear();
   document.documentElement.dataset.theme = "dark";
   container = document.createElement("div");
@@ -336,7 +376,7 @@ describe("agent chat shell", () => {
     expect(container?.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("renders the session panel with the static history", async () => {
+  it("renders the session panel from the sessions API", async () => {
     stubFetch((url, init) => defaultHandler(url, init));
     await act(async () => {
       root?.render(<App />);
@@ -345,9 +385,9 @@ describe("agent chat shell", () => {
 
     expect(container?.querySelector(".session-panel")).not.toBeNull();
     expect(container?.querySelector(".session-head-title")?.textContent).toBe("历史会话");
-    expect(container?.querySelectorAll(".session-item").length).toBe(SESSIONS_SEED.length);
+    expect(container?.querySelectorAll(".session-item").length).toBe(BASE_SESSIONS.length);
     expect(container?.querySelector(".session-item[aria-current='true']")?.textContent).toContain(
-      SESSIONS_SEED[0].title,
+      BASE_SESSIONS[0].title,
     );
     // 最近活动的会话落在「今天」分组
     expect(container?.querySelector(".session-group")?.textContent).toBe("今天");
@@ -416,7 +456,7 @@ describe("agent chat shell", () => {
 
     // 切回原会话：提问仍在
     const back = Array.from(container?.querySelectorAll<HTMLButtonElement>(".session-item") ?? []).find(
-      (item) => item.textContent?.includes(SESSIONS_SEED[0].title),
+      (item) => item.textContent?.includes(BASE_SESSIONS[0].title),
     );
     await act(async () => {
       back?.click();
@@ -438,7 +478,7 @@ describe("agent chat shell", () => {
     await flush();
 
     const activeItem = () => container?.querySelector(".session-item[aria-current='true']");
-    expect(container?.querySelectorAll(".session-item").length).toBe(SESSIONS_SEED.length + 1);
+    expect(container?.querySelectorAll(".session-item").length).toBe(BASE_SESSIONS.length + 1);
     expect(activeItem()?.textContent).toContain("新会话");
     expect(container?.textContent).toContain("向团队知识库提问");
 

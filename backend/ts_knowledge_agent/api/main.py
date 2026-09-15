@@ -19,6 +19,10 @@ from ts_knowledge_agent.agent.setup import mask_key
 from ts_knowledge_agent.adapters.git_sync import pull_repository, push_repository
 from ts_knowledge_agent.config import MIN_SCAN_INTERVAL_MINUTES, Settings
 from ts_knowledge_agent.services.scheduler import run_once_with_report
+from ts_knowledge_agent.services.sessions import (
+    SessionStore,
+    session_database_path,
+)
 from ts_knowledge_agent.services.usage import TraceCollector, append_trace
 
 app = FastAPI(title="TS Knowledge Agent", version="0.1.0")
@@ -39,6 +43,7 @@ def load_settings() -> Settings:
 
 class ChatRequest(BaseModel):
     question: str
+    session_id: str | None = None
     max_steps: int | None = None
 
 
@@ -137,6 +142,64 @@ def _provider(settings: Settings):
     return provider
 
 
+@app.get("/api/v1/sessions")
+def list_sessions() -> dict:
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        return {"sessions": [item.to_dict() for item in store.list_sessions()]}
+    finally:
+        store.close()
+
+
+@app.post("/api/v1/sessions")
+def create_session() -> dict:
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        return store.create_session().to_dict()
+    finally:
+        store.close()
+
+
+@app.get("/api/v1/sessions/{session_id}/messages")
+def session_messages(session_id: str) -> dict:
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        session = store.get_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        return {"session": session.to_dict(), "messages": store.list_messages(session_id)}
+    finally:
+        store.close()
+
+
+def _persist_turn(store: SessionStore, session_id: str, question: str, collector, result) -> None:
+    """把一轮对话写入本机会话库：用户消息、工具过程、回答或错误。"""
+
+    store.append_message(session_id, "user", {"content": question})
+    steps = [
+        {"name": entry.get("tool"), "detail": entry.get("query") or entry.get("path") or "", "status": "done"}
+        for entry in collector.steps
+    ]
+    if steps:
+        store.append_message(session_id, "process", {"steps": steps, "running": False})
+    if result is not None and result.error:
+        store.append_message(session_id, "error", {"message": str(result.error)})
+    elif result is not None:
+        store.append_message(
+            session_id,
+            "answer",
+            {
+                "content": result.answer or "",
+                "citations": list(result.citations or []),
+                "steps": result.steps,
+                "retrieved": bool(result.retrieved),
+            },
+        )
+
+
 @app.post("/api/v1/chat")
 def chat(request: ChatRequest) -> dict:
     question = (request.question or "").strip()
@@ -148,12 +211,19 @@ def chat(request: ChatRequest) -> dict:
     collector = TraceCollector()
     result = run_agent(settings, question, provider, max_steps=steps, on_event=collector)
     append_trace(settings.working_directory, collector.to_record(settings.personal_workspace, "web"))
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        session = store.ensure_session(request.session_id, question)
+        _persist_turn(store, session.id, question, collector, result)
+    finally:
+        store.close()
     return {
         "answer": result.answer,
         "citations": result.citations,
         "steps": result.steps,
         "error": result.error,
         "retrieved": result.retrieved,
+        "session_id": session.id,
     }
 
 
@@ -178,8 +248,14 @@ def chat_stream(request: ChatRequest) -> StreamingResponse:
                     collector(event)
                     channel.put(event)
 
-                run_agent(settings, question, provider, max_steps=steps, on_event=emit)
+                result = run_agent(settings, question, provider, max_steps=steps, on_event=emit)
                 append_trace(settings.working_directory, collector.to_record(settings.personal_workspace, "web"))
+                store = SessionStore(session_database_path(settings.working_directory))
+                try:
+                    session = store.ensure_session(request.session_id, question)
+                    _persist_turn(store, session.id, question, collector, result)
+                finally:
+                    store.close()
             except Exception as exc:  # pragma: no cover - defensive
                 channel.put({"type": "error", "error": f"{type(exc).__name__}: {exc}"})
             finally:

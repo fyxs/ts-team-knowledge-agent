@@ -72,13 +72,14 @@ export async function saveModelConfig(patch: ModelConfigPatch): Promise<ModelCon
 /** 流式提问：按事件回调逐步返回 Agent 的检索与作答过程。 */
 export async function streamQuestion(
   question: string,
+  sessionId: string,
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch("/api/v1/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, session_id: sessionId || undefined }),
     signal,
   });
   if (!response.ok || !response.body) {
