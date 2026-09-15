@@ -84,13 +84,12 @@ L3  离线 / 异机副本（移动硬盘，或 mos ⇄ mes 互备）
 
 ## 三、已批准但未执行
 
-```text
-文档补齐（2026-09-15 用户已同意）：
-  · docs/local-install-and-serve.md        补开机自启（TSKnowledgeAgentWebService）与新机接入步骤
-  · docs/architecture-v1.md                补会话、地址栏路由、全文检索、巡检、埋点
-  · docs/design-v1.md / docs/logging-v1.md 同步最新实现
-  · 飞书《TS Team Knowledge Agent 设计与系统架构》  补巡检、埋点、地址栏路由、全文检索
-```
+（暂无）
+
+> 2026-09-15 完成：文档补齐已执行——应用仓 `docs/architecture-v1.md`、`docs/design-v1.md`、
+> `docs/logging-v1.md`、`docs/local-install-and-serve.md` 已同步最新实现（提交 `2e457a8`，+181/-7）；
+> 飞书《TS Team Knowledge Agent 设计与系统架构》已追加「十、会话、检索与地址栏」「十一、治理与自检」，
+> 回读确认新增章节存在、架构图与交互式链接未丢失。
 
 ## 四、其它暂缓（用户明确：后面再看）
 
