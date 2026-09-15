@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import platform
+import subprocess
 from datetime import datetime, timezone
 import getpass
 import os
@@ -33,6 +35,13 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.service_control import (
+    DEFAULT_WEB_PORT,
+    restart_service,
+    service_status,
+    start_service,
+    stop_service,
+)
 from ts_knowledge_agent.services.scanner import scan_directory
 from ts_knowledge_agent.services.scheduler import is_scan_due, run_once_with_report, run_scheduler
 
@@ -50,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--scan-interval-minutes", type=int, default=60)
     init.add_argument("--shared-knowledge-repository-url", default=DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)
     init.add_argument("--skip-model-setup", action="store_true")
+    init.add_argument("--skip-scheduled-tasks", action="store_true")
 
     sub.add_parser("status")
 
@@ -105,11 +115,37 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--if-due", action="store_true", help="距上次巡检达到间隔时才执行")
     inspect.add_argument("--interval-minutes", type=int, default=DEFAULT_INSPECTION_INTERVAL_MINUTES)
     inspect.add_argument("--json", action="store_true")
+    service = sub.add_parser("service")
+    service.add_argument("--port", type=int, default=DEFAULT_WEB_PORT)
+    service_sub = service.add_subparsers(dest="service_action")
+    for action_name in ("start", "stop", "restart", "status"):
+        service_sub.add_parser(action_name)
     inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
     return parser
+
+
+def _install_scheduled_tasks(config_path: Path) -> None:
+    """Windows 上注册/刷新启动器与计划任务；非 Windows 或失败时给出明确提示。"""
+
+    if platform.system() != "Windows":
+        print("scheduled tasks skipped: windows only")
+        return
+    script = Path(__file__).resolve().parents[3] / "scripts" / "install-windows-tasks.ps1"
+    if not script.is_file():
+        print(f"scheduled task installer missing: {script}")
+        return
+    environment = {**os.environ, "TS_KB_CONFIG": str(config_path)}
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, env=environment,
+    )
+    for line in (result.stdout or "").strip().splitlines()[-3:]:
+        print(line)
+    if result.returncode != 0:
+        print(f"scheduled task install failed; rerun manually: {script}")
 
 
 def _print(payload: object) -> None:
@@ -156,6 +192,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("model setup skipped; run ts-team-kb config set / config set-key later")
         else:
             configure_model_interactively(settings).write_file(config_path)
+        if args.skip_scheduled_tasks:
+            print("scheduled tasks skipped; run scripts/install-windows-tasks.ps1 later")
+        else:
+            _install_scheduled_tasks(config_path)
         return 0
 
     settings = Settings.from_env()
@@ -302,6 +342,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"api key stored at {path} (never commit this file)")
             return 0
         parser.error("config requires an action: show | set | set-key")
+    if args.command == "service":
+        action = getattr(args, "service_action", None)
+        service_config = Path(os.getenv("TS_KB_CONFIG", str(settings.working_directory / "ts-kb.json")))
+        if action is None:
+            parser.error("service requires an action: start | stop | restart | status")
+        if action == "status":
+            _print(service_status(args.port).to_dict())
+            return 0
+        if action == "start":
+            ok, detail = start_service(settings, config_path=service_config, port=args.port)
+        elif action == "stop":
+            ok, detail = stop_service(args.port)
+        else:
+            ok, detail = restart_service(settings, config_path=service_config, port=args.port)
+        print(f"{action}: {'ok' if ok else 'failed'} {detail}")
+        return 0 if ok else 1
+
     if args.command == "inspect":
         if args.if_due and not is_inspection_due(settings.working_directory, args.interval_minutes):
             print(f"skipped=not_due interval_minutes={args.interval_minutes}")

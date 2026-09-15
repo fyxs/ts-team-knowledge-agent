@@ -86,6 +86,17 @@ $env:TS_KB_CONFIG = "<本机工作目录>\ts-kb.json"
 `TSKnowledgeAgentWebService`（登录自启 Web 服务）。任务均为登录后运行；
 启动失败会写入 `logs/runner-errors.log`，不会静默失败。
 
+服务控制（安装后随时可用）：
+
+```powershell
+ts-team-kb service status     # 端口 / 进程 / 健康状态
+ts-team-kb service start      # 启动（已在运行则直接返回）
+ts-team-kb service stop       # 停止
+ts-team-kb service restart    # 重启
+```
+
+`ts-team-kb init` 在 Windows 上默认安装计划任务；需要跳过时加 `--skip-scheduled-tasks`。
+
 ## 常用命令
 
 ```text
