@@ -55,15 +55,61 @@ def build(out_dir: Path) -> Path:
     return wheels[-1]
 
 
+
+def build_bundle(out_dir: Path, build_python: Path | None = None) -> Path:
+    """用 PyInstaller 产出免安装目录，并打成 zip（exe 分发件）。"""
+
+    import zipfile
+
+    interpreter = build_python or Path(sys.executable)
+    check = subprocess.run([str(interpreter), '-c', 'import PyInstaller'], capture_output=True, text=True)
+    if check.returncode != 0:
+        raise SystemExit(f"该解释器没有 PyInstaller：{interpreter}；请先 pip install -e .[build]")
+    target = out_dir / 'packaging'
+    target.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [str(interpreter), '-m', 'PyInstaller', str(PROJECT_ROOT / 'packaging' / 'ts-team-kb.spec'),
+         '--noconfirm', '--clean', '--distpath', str(target), '--workpath', str(out_dir / 'pyi-work')],
+        cwd=str(PROJECT_ROOT / 'packaging'), capture_output=True, text=True)
+    if result.returncode != 0:
+        print(result.stdout[-2000:])
+        print(result.stderr[-2000:])
+        raise SystemExit("PyInstaller 构建失败")
+    bundle = target / 'ts-team-kb'
+    version = _project_version()
+    archive = out_dir / f"ts-team-kb-{version}-win-x64.zip"
+    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as handle:
+        for path in bundle.rglob('*'):
+            if path.is_file():
+                handle.write(path, Path('ts-team-kb') / path.relative_to(bundle))
+    return archive
+
+
+def _project_version() -> str:
+    """从 pyproject 读版本号，保证产物名与包版本一致。"""
+
+    for line in (PROJECT_ROOT / 'pyproject.toml').read_text(encoding='utf-8').splitlines():
+        if line.startswith('version'):
+            return line.split('=')[1].strip().strip('"')
+    return '0.0.0'
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dist-release"))
+    parser.add_argument("--exe", action="store_true", help="同时构建免安装目录并打包 zip")
+    parser.add_argument("--build-python", default=None, help="含 PyInstaller 的解释器路径")
     args = parser.parse_args()
     wheel = build(Path(args.out))
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
     print(f"wheel={wheel}")
     print(f"bytes={wheel.stat().st_size}")
     print(f"sha256={digest}")
+    if args.exe:
+        archive = build_bundle(Path(args.out), Path(args.build_python) if args.build_python else None)
+        print(f"zip={archive}")
+        print(f"zip_bytes={archive.stat().st_size}")
+        print(f"zip_sha256={hashlib.sha256(archive.read_bytes()).hexdigest()}")
     return 0
 
 

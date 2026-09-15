@@ -149,6 +149,34 @@ Enable-ScheduledTask  -TaskName 'TSKnowledgeAgentScheduler'
 运行日志：工作目录 `logs/web-service.log`（自启与幂等记录）、`logs/api.log`（服务输出）、
 `logs/runner-errors.log`（运行脚本自身的失败留痕）。
 
+## 免安装包（exe）安装
+
+面向不想装 Python / Node 的成员机。
+
+```text
+1. 下载   应用仓 Release 里的 ts-team-kb-<版本>-win-x64.zip（私有仓，需登录 GitHub）
+2. 解压   到任意目录，例如 D:\2Work\ts-team-kb（免安装，删除即卸载）
+3. 初始化 ts-team-kb\ts-team-kb.exe init --working-directory <工作目录> ^
+             --personal-workspace <成员标识> --shared-source-directory <源目录>
+4. 注册   ts-team-kb\ts-team-kb.exe service install
+5. 启动   登录后由计划任务自动拉起；也可手动 ts-team-kb.exe serve --host 0.0.0.0 --port 8088
+```
+
+**包内含什么**：Python 运行时 + 应用 + 前端产物（357 KB）——因此**不需要装 Python，也不需要 Node**。
+
+**包内不含什么**：MinerU 及其重依赖（torch / transformers，约 1.1 GB）。原因：转换走独立解释器进程，
+打包进 exe 既不可行也不稳定。因此 exe 模式下 PDF / DOCX / PPTX 转换需要额外制备 MinerU 环境：
+
+```text
+现状（待补命令）：手动建一个环境并安装，再把解释器路径写进 ts-kb.json 的 mineru_python
+    python -m venv D:\2Work\ts-team-kb-mineru
+    D:\2Work\ts-team-kb-mineru\Scripts\python.exe -m pip install "MinerU[pipeline]"
+    然后 ts-kb.json:  "mineru_python": "D:\\2Work\\ts-team-kb-mineru\\Scripts\\python.exe"
+用 pip / pipx 安装时不需要这一步：MinerU 是普通依赖，随包自带。
+```
+
+> 注：exe 与 pipx 两条路线的差异仅在此处——exe 拿不到进程外的大依赖，pip 装则天然带全。
+
 ## 权限与安全边界
 
 ```text

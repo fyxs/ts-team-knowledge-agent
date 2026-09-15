@@ -306,3 +306,14 @@ git checkout -- <path>                      # 用仓库版本覆盖本地
 ```
 
 两部分都按 `--if-due` 判定到期，并通过 `StartWhenAvailable` 在关机/休眠后补跑一次。
+
+## 发布与分发
+
+```text
+构建发布产物   python scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>
+               → dist-release/<wheel>（pip/pipx 分发）与 ts-team-kb-<版本>-win-x64.zip（免安装包）
+发布到 Release python scripts/publish-release.py --tag v<版本> --prerelease --apply
+               （默认 dry-run；上传后回读资产校验大小与 state）
+产物特性       免安装包内含 Python 运行时 + 应用 + 前端产物，成员机不需要装 Python 或 Node；
+               不含 MinerU（torch 约 1.1GB，转换走独立解释器），需单独制备，见 docs/local-install-and-serve.md
+```
