@@ -116,6 +116,7 @@ ts-team-kb schemas --output <dir>    导出知识条目 / 来源登记 / 审查�
 ts-team-kb inspect [--per-type N] [--if-due]    结构巡检并发布治理记录
 ts-team-kb evaluate --mode retrieval|citations   检索与引用评测（citations 调模型）
 ts-team-kb prune            清理本机系统产物（默认 dry-run，删最旧；不动会话库与埋点）
+ts-team-kb setup-mineru    制备 MinerU 转换环境（建环境 + 安装 + 自检 + 写配置）
 ts-team-kb usage [--days N] [--suggest]          埋点指标与评测题候选
 ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状态
 ```

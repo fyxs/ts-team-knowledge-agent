@@ -36,6 +36,7 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.mineru_setup import default_mineru_env_path, setup_mineru
 from ts_knowledge_agent.services.retention import apply_prune, build_prune_plan
 from ts_knowledge_agent.services.usage import (
     TraceCollector,
@@ -151,6 +152,13 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("start", "stop", "restart", "status"):
         service_sub.add_parser(action_name)
     inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
+    setup_mineru_parser = sub.add_parser("setup-mineru", help="制备 MinerU 转换环境")
+    setup_mineru_parser.add_argument("--path", default=None, help="环境落点（默认用户目录下的 mineru-env）")
+    setup_mineru_parser.add_argument("--python", default=None, help="复用已有的 MinerU 解释器，不新建环境")
+    setup_mineru_parser.add_argument("--requirement", default="MinerU[pipeline]", help="安装目标，默认 MinerU[pipeline]")
+    setup_mineru_parser.add_argument("--dry-run", action="store_true", help="只打印将执行的步骤")
+    setup_mineru_parser.add_argument("--no-verify", action="store_true", help="跳过导入自检")
+
     prune = sub.add_parser("prune")
     prune.add_argument("--keep-inspection", type=int, default=30)
     prune.add_argument("--keep-evaluation", type=int, default=30)
@@ -477,6 +485,31 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not args.json:
                 print(f"governance={published}")
         return 1 if report.blocking else 0
+    if args.command == "setup-mineru":
+        settings = Settings.from_env()
+        config_path = Path(os.getenv("TS_KB_CONFIG", str(settings.working_directory / "ts-kb.json")))
+        result = setup_mineru(
+            env_dir=Path(args.path).expanduser() if args.path else default_mineru_env_path(),
+            python=Path(args.python).expanduser() if args.python else None,
+            requirement=args.requirement,
+            dry_run=args.dry_run,
+            verify=not args.no_verify,
+        )
+        for step in result.steps:
+            print(step)
+        if not result.ok:
+            print(f"失败：{result.error}")
+            return 1
+        if result.python and not args.dry_run:
+            if config_path.is_file():
+                updated = replace(Settings.from_file(config_path), mineru_python=result.python)
+            else:
+                updated = replace(settings, mineru_python=result.python)
+            updated.write_file(config_path)
+            print(f"mineru_python={result.python}")
+            print(f"config={config_path}")
+        return 0
+
     if args.command == "prune":
         settings = Settings.from_env()
         plan = build_prune_plan(
