@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "q001",
+      "question": "空调群控第一阶段产品设计文档里，目标和范围是怎么定义的？",
+      "expected_paths": [
+        "members/whm/projects/能源/空调群控/AI-native空调群控_第一阶段产品设计文档_v1.0/AI-native空调群控_第一阶段产品设计文档_v1.0.md"
+      ],
+      "keywords": [
+        "空调群控",
+        "第一阶段",
+        "产品设计"
+      ],
+      "note": "产品设计文档"
+    },
+    {
+      "id": "q003",
+      "question": "基于 tdf-bff 新起一个 BFF 项目需要哪些步骤和配置？",
+      "expected_paths": [
+        "members/whm/研发指南/BFF/基于tdf-bff新起BFF项目指南/基于tdf-bff新起BFF项目指南.md"
+      ],
+      "keywords": [
+        "tdf-bff",
+        "BFF",
+        "新起项目"
+      ],
+      "note": "研发指南"
+    },
+    {
+      "id": "q004",
+      "question": "TDesign Form 的校验机制是怎么设计的？",
+      "expected_paths": [
+        "members/whm/projects/移动端组件库/Research/Form/TDesign-Form系统深度分析报告/TDesign-Form系统深度分析报告.md"
+      ],
+      "keywords": [
+        "TDesign",
+        "Form",
+        "校验"
+      ],
+      "note": "组件库研究报告"
+    },
+    {
+      "id": "q005",
+      "question": "院事通 Agent 的 SSE 协议定义了哪些事件和字段？",
+      "expected_paths": [
+        "members/whm/projects/院事通/院事通Agent1.0/院事通Agent SSE协议规范/院事通Agent SSE协议规范.md"
+      ],
+      "keywords": [
+        "院事通",
+        "SSE",
+        "协议"
+      ],
+      "note": "协议规范"
+    },
+    {
+      "id": "q006",
+      "question": "实验事件日志与数据采集最终方案的核心设计是什么？",
+      "expected_paths": [
+        "members/whm/实验室/实验事件日志与数据采集/最终方案/experiment-event-log-mvp-v1.1/experiment-event-log-mvp-v1.1.md"
+      ],
+      "keywords": [
+        "实验事件日志",
+        "数据采集",
+        "最终方案"
+      ],
+      "note": "最终方案"
+    },
+    {
+      "id": "q007",
+      "question": "三算法 AB 测试方案里分流和评估是怎么设计的？",
+      "expected_paths": [
+        "members/whm/projects/能源/节能运营/2026-08-25-ab-routing-design/2026-08-25-ab-routing-design.md"
+      ],
+      "keywords": [
+        "AB测试",
+        "分流",
+        "三算法"
+      ],
+      "note": "实验设计"
+    },
+    {
+      "id": "q008",
+      "question": "Harness Engineering 的运行时质量保证体系包含哪些部分？",
+      "expected_paths": [
+        "members/whm/speeches/Harness Engineering-AI辅助开发的运行时质量保证体系/Harness Engineering-AI辅助开发的运行时质量保证体系.md"
+      ],
+      "keywords": [
+        "Harness",
+        "运行时质量",
+        "体系"
+      ],
+      "note": "演讲材料"
+    },
+    {
+      "id": "q009",
+      "question": "AG-UI 协议的核心概念和对接方式是怎样的？",
+      "expected_paths": [
+        "members/whm/projects/院事通/一期/AG-UI协议调研/AG-UI协议调研.md"
+      ],
+      "keywords": [
+        "AG-UI",
+        "协议",
+        "对接"
+      ],
+      "note": "调研文档"
+    },
+    {
+      "id": "q010",
+      "question": "xil、ai-capability、cortex 三个仓库之间是怎么关联的？",
+      "expected_paths": [
+        "members/whm/projects/能源/数据模型/三仓库关联机制详解/三仓库关联机制详解.md"
+      ],
+      "keywords": [
+        "三仓库",
+        "关联机制",
+        "xil"
+      ],
+      "note": "数据模型"
+    },
+    {
+      "id": "q011",
+      "question": "前端编码规范对命名、目录和组件有哪些约束？",
+      "expected_paths": [
+        "members/whm/研发指南/前端规范/前端编码规范（简）/前端编码规范（简）.md"
+      ],
+      "keywords": [
+        "前端编码规范",
+        "命名",
+        "组件"
+      ],
+      "note": "研发规范"
+    },
+    {
+      "id": "q012",
+      "question": "2D 展厅打点图的改造方案做了哪些研究和技术选型？",
+      "expected_paths": [
+        "members/whm/projects/ecc-2d/2d打点图/exhibition-hall-2d-markup-research-and-transformation-plan/exhibition-hall-2d-markup-research-and-transformation-plan.md"
+      ],
+      "keywords": [
+        "打点图",
+        "展厅",
+        "改造方案"
+      ],
+      "note": "项目方案"
+    },
+    {
+      "id": "q013",
+      "question": "Cascader 级联选择器组件的研究结论是什么？",
+      "expected_paths": [
+        "members/whm/projects/移动端组件库/Research/Cascader/Cascader组件研究报告/Cascader组件研究报告.md"
+      ],
+      "keywords": [
+        "Cascader",
+        "级联选择器",
+        "研究"
+      ],
+      "note": "组件研究"
+    },
+    {
+      "id": "q014",
+      "question": "规则学习推理服务对外提供哪些接口？",
+      "expected_paths": [
+        "members/whm/projects/能源/规则学习推理服务-使用说明/规则学习推理服务-使用说明.md"
+      ],
+      "keywords": [
+        "规则学习",
+        "推理服务",
+        "接口"
+      ],
+      "note": "服务说明"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ts_knowledge_agent.config import Settings
-from ts_knowledge_agent.repositories.search_store import SearchStore
+from ts_knowledge_agent.repositories.search_store import SearchStore, query_tokens
 from ts_knowledge_agent.repositories.state_store import SUCCESS_STATUSES, WARNING_STATUSES, StateStore
 
 SNIPPET_WIDTH = 80
@@ -72,7 +72,9 @@ def knowledge_search(settings: Settings, query: str, limit: int = 5, member: str
             for row in store.search_like(query, limit * 4):
                 if not row["path"].startswith(prefix) or row["path"] in seen:
                     continue
-                hits.append(KnowledgeHit(row["path"], row["title"], _snippet(row["content"], query), "substring"))
+                terms = query_tokens(query)
+                best = max(terms, key=len) if terms else query
+                hits.append(KnowledgeHit(row["path"], row["title"], _snippet(row["content"], best), "substring"))
                 seen.add(row["path"])
         return hits[:limit]
     finally:

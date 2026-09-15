@@ -35,6 +35,12 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.evaluation import (
+    evaluate_citations,
+    evaluate_retrieval,
+    load_cases,
+    write_evaluation_report,
+)
 from ts_knowledge_agent.services.service_control import (
     DEFAULT_WEB_PORT,
     restart_service,
@@ -115,6 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--if-due", action="store_true", help="距上次巡检达到间隔时才执行")
     inspect.add_argument("--interval-minutes", type=int, default=DEFAULT_INSPECTION_INTERVAL_MINUTES)
     inspect.add_argument("--json", action="store_true")
+    evaluate = sub.add_parser("evaluate")
+    evaluate.add_argument("--question-set", type=Path, default=None)
+    evaluate.add_argument("--mode", choices=("retrieval", "citations", "both"), default="both")
+    evaluate.add_argument("--limit", type=int, default=10)
+    evaluate.add_argument("--max-steps", type=int, default=None)
     service = sub.add_parser("service")
     service.add_argument("--port", type=int, default=DEFAULT_WEB_PORT)
     service_sub = service.add_subparsers(dest="service_action")
@@ -342,6 +353,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"api key stored at {path} (never commit this file)")
             return 0
         parser.error("config requires an action: show | set | set-key")
+    if args.command == "evaluate":
+        question_set = args.question_set or (Path(__file__).resolve().parents[3] / "evaluation" / "knowledge-questions.json")
+        cases = load_cases(question_set)
+        payload: dict = {
+            "question_set": str(question_set),
+            "mode": args.mode,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if args.mode in ("retrieval", "both"):
+            payload["retrieval"] = evaluate_retrieval(settings, cases, limit=args.limit)
+        if args.mode in ("citations", "both"):
+            provider = create_provider(settings)
+            if provider is None:
+                print("model provider not configured; citations evaluation skipped")
+            else:
+                payload["citations"] = evaluate_citations(
+                    settings, cases, provider, max_steps=args.max_steps or settings.model_max_steps)
+        path = write_evaluation_report(settings.working_directory, payload)
+        if "retrieval" in payload:
+            print("retrieval_nl " + json.dumps(payload["retrieval"]["natural_language"], ensure_ascii=False))
+            if payload["retrieval"]["keywords"]:
+                print("retrieval_kw " + json.dumps(payload["retrieval"]["keywords"], ensure_ascii=False))
+        if "citations" in payload:
+            summary = {key: value for key, value in payload["citations"].items() if key != "results"}
+            print("citations " + json.dumps(summary, ensure_ascii=False))
+        print(f"report={path}")
+        return 0
+
     if args.command == "service":
         action = getattr(args, "service_action", None)
         service_config = Path(os.getenv("TS_KB_CONFIG", str(settings.working_directory / "ts-kb.json")))
