@@ -7,6 +7,10 @@ from ts_knowledge_agent.adapters.mineru_adapter import MinerUConverter
 from ts_knowledge_agent.adapters.excel_adapter import convert_excel
 
 CONVERTER_VERSION = "mineru-3.4.5"
+CONVERTER_MARKDOWN_COPY = "markdown-copy"
+CONVERTER_TEXT_DECODE = "text-decode"
+CONVERTER_EXCEL = "excel-adapter"
+CONVERTER_INJECTED = "custom-converter"
 SUPPORTED_DIRECT_COPY_EXTENSIONS = frozenset({".md"})
 SUPPORTED_TEXT_EXTENSIONS = frozenset({".txt"})
 SUPPORTED_MINERU_EXTENSIONS = frozenset({".ppt", ".pptx", ".doc", ".docx", ".xls", ".xlsx", ".pdf"})
@@ -28,6 +32,7 @@ class ConversionResult:
     output_path: Path
     bytes_written: int
     origin: str = ORIGIN_TOOL
+    converter: str = CONVERTER_VERSION
 
     @property
     def from_source(self) -> bool:
@@ -52,13 +57,18 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
     output.parent.mkdir(parents=True, exist_ok=True)
     extension = source.suffix.lower()
     if converter is not None:
-        output.write_text(converter.convert(source), encoding="utf-8"); origin = ORIGIN_TOOL
+        output.write_text(converter.convert(source), encoding="utf-8")
+        origin = ORIGIN_TOOL; label = CONVERTER_INJECTED
     elif is_direct_copy(source):
-        shutil.copy2(source, output); origin = ORIGIN_SOURCE
+        shutil.copy2(source, output)
+        origin = ORIGIN_SOURCE; label = CONVERTER_MARKDOWN_COPY
     elif extension == ".txt":
-        output.write_text(_decode_text(source), encoding="utf-8"); origin = ORIGIN_SOURCE
+        output.write_text(_decode_text(source), encoding="utf-8")
+        origin = ORIGIN_SOURCE; label = CONVERTER_TEXT_DECODE
     elif extension == ".xlsx":
-        convert_excel(source, output); origin = ORIGIN_TOOL
+        convert_excel(source, output)
+        origin = ORIGIN_TOOL; label = CONVERTER_EXCEL
     else:
-        MinerUConverter(mineru_python).convert_to(source, output); origin = ORIGIN_TOOL
-    return ConversionResult(source, output, output.stat().st_size, origin)
+        MinerUConverter(mineru_python).convert_to(source, output)
+        origin = ORIGIN_TOOL; label = CONVERTER_VERSION
+    return ConversionResult(source, output, output.stat().st_size, origin, label)

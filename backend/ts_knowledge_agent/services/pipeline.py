@@ -8,6 +8,7 @@ from ts_knowledge_agent.adapters.git_sync import sync_repository
 from ts_knowledge_agent.services.secret_scan import quarantine_document, scan_markdown_file
 from ts_knowledge_agent.services.feedback import FeedbackRecord, append_feedback, has_open_feedback
 from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_file
+from ts_knowledge_agent.services.postprocess import ensure_markdown_title
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
 from ts_knowledge_agent.services.run_lock import RunLock
@@ -78,12 +79,14 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                 try:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
+                    if not result.from_source:
+                        ensure_markdown_title(result.output_path, source.absolute_path.stem)
                     quality = inspect_markdown_file(result.output_path)
                     warning_message = None if quality.ok else "; ".join(quality.errors)
                     if warning_message and not result.from_source:
                         # 工具产物质量问题：可能由转换引入，隔离出共享仓库，不入库
                         quarantine_document(settings.working_directory, settings.shared_knowledge_repository_directory, result.output_path.parent)
-                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"quality_failed",warning_message,reason="quality_failed")
+                        state.record_conversion(source.relative_path,source.sha256,result.output_path,result.converter,"quality_failed",warning_message,reason="quality_failed")
                         state.update_source_status(source.relative_path,"quality_failed")
                         reason_counts["quality_failed"]=reason_counts.get("quality_failed",0)+1
                         failed += 1
@@ -91,14 +94,14 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     secret = scan_markdown_file(result.output_path)
                     if not secret.ok:
                         quarantine_document(settings.working_directory, settings.shared_knowledge_repository_directory, result.output_path.parent)
-                        state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,"blocked_secret",secret.summary(),reason="blocked_secret")
+                        state.record_conversion(source.relative_path,source.sha256,result.output_path,result.converter,"blocked_secret",secret.summary(),reason="blocked_secret")
                         if not has_open_feedback(settings.working_directory, source.sha256, "credential_exposure"):
                             append_feedback(settings.working_directory, FeedbackRecord(
                                 source_relative_path=source.relative_path,
                                 source_sha256=source.sha256,
                                 file_type=source.absolute_path.suffix.lower(),
                                 converter="secret-scan",
-                                converter_version=CONVERTER_VERSION,
+                                converter_version=result.converter,
                                 output_path=str(output),
                                 category="credential_exposure",
                                 description=secret.summary(),
@@ -113,7 +116,7 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                         failed += 1
                         continue
                     status = "quality_warned" if warning_message else "converted"
-                    state.record_conversion(source.relative_path,source.sha256,result.output_path,CONVERTER_VERSION,status,reason=reason,warning_message=warning_message)
+                    state.record_conversion(source.relative_path,source.sha256,result.output_path,result.converter,status,reason=reason,warning_message=warning_message)
                     state.update_source_status(source.relative_path,status)
                     if warning_message:
                         warned+=1
@@ -124,7 +127,7 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                                 source_sha256=source.sha256,
                                 file_type=source.absolute_path.suffix.lower(),
                                 converter="source-copy",
-                                converter_version=CONVERTER_VERSION,
+                                converter_version=result.converter,
                                 output_path=str(result.output_path),
                                 category="source_quality_warning",
                                 description=warning_message,
