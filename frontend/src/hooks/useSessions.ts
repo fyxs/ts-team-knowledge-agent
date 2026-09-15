@@ -14,6 +14,31 @@ const PLACEHOLDER_TITLE = "新会话";
 
 const DAY = 24 * 60 * 60 * 1000;
 
+/** 地址栏里的会话参数：刷新与分享都靠它定位当前会话。 */
+const SESSION_PARAM = "session";
+
+function readSessionParam(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return new URLSearchParams(window.location.search).get(SESSION_PARAM) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** 把当前会话写回地址栏；push 用于用户主动切换（可后退），replace 用于程序性纠正。 */
+function writeSessionParam(id: string, mode: "push" | "replace" = "replace"): void {
+  if (typeof window === "undefined" || typeof window.history?.replaceState !== "function") return;
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set(SESSION_PARAM, id);
+  else url.searchParams.delete(SESSION_PARAM);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (next === current) return;
+  if (mode === "push") window.history.pushState({ session: id }, "", next);
+  else window.history.replaceState({ session: id }, "", next);
+}
+
 export type SessionGroup = {
   label: string;
   items: SessionSummary[];
@@ -81,8 +106,12 @@ export function useSessions() {
           items = [created];
         }
         if (cancelled) return;
+        // 用地址栏里的会话恢复选中项；分享链接指向已删除的会话时回落到最近一条
+        const requested = readSessionParam();
+        const resolved = items.find((item) => item.id === requested)?.id ?? items[0]?.id ?? "";
         setSessions(items);
-        setActiveId(items[0]?.id ?? "");
+        setActiveId(resolved);
+        writeSessionParam(resolved, "replace");
       } catch {
         // 接口不可用时保持空列表：面板显示空态，不伪造历史会话。
       }
@@ -92,15 +121,36 @@ export function useSessions() {
     };
   }, []);
 
+  // 会话切换后同步地址栏，保证刷新与分享落在同一会话上
+  useEffect(() => {
+    if (!activeId) return;
+    if (sessions.length > 0 && !sessions.some((item) => item.id === activeId)) return;
+    writeSessionParam(activeId, "replace");
+  }, [activeId, sessions]);
+
+  // 浏览器前进/后退：按地址栏里的会话恢复选中项
+  useEffect(() => {
+    const handlePopState = () => {
+      const requested = readSessionParam();
+      if (!requested) return;
+      setActiveId((current) => (sessions.some((item) => item.id === requested) ? requested : current));
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [sessions]);
+
   const createSession = useCallback(async () => {
     const created = await createSessionRequest();
     setSessions((current) => [created, ...current.filter((item) => item.id !== created.id)]);
     setActiveId(created.id);
+    writeSessionParam(created.id, "push");
     setQuery("");
   }, []);
 
   const selectSession = useCallback((id: string) => {
     setActiveId(id);
+    // push：浏览器后退可在会话之间回退；刷新与分享靠地址栏里的会话参数
+    writeSessionParam(id, "push");
   }, []);
 
   /** 会话产生新消息时调用：就地刷新活动时间；标题以服务端为准，随后由 refresh 校正。 */

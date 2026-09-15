@@ -739,4 +739,53 @@ describe("agent chat shell", () => {
     await flush();
     expect(container?.querySelector(".focus-view")).toBeNull();
   });
+
+  it("keeps the active session in the URL so a refresh or a shared link returns to it", async () => {
+    window.history.replaceState({}, "", "/");
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    expect(window.location.search).toContain(`session=${BASE_SESSIONS[0].id}`);
+
+    const other = Array.from(container?.querySelectorAll<HTMLButtonElement>(".session-item") ?? []).find((item) =>
+      item.textContent?.includes(BASE_SESSIONS[1].title),
+    );
+    await act(async () => {
+      other?.click();
+    });
+    await flush();
+
+    expect(window.location.search).toContain(`session=${BASE_SESSIONS[1].id}`);
+    expect(container?.querySelector('.session-item[aria-current="true"]')?.textContent).toContain(BASE_SESSIONS[1].title);
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("restores the session written in the URL on load", async () => {
+    window.history.replaceState({}, "", `/?session=${BASE_SESSIONS[2].id}`);
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    expect(container?.querySelector('.session-item[aria-current="true"]')?.textContent).toContain(BASE_SESSIONS[2].title);
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("falls back to the newest session when the URL points to a missing one", async () => {
+    window.history.replaceState({}, "", "/?session=s-removed");
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    // 分享链接里的会话已被删除：回落到最近一条，并把地址栏纠正过来
+    expect(container?.querySelector('.session-item[aria-current="true"]')?.textContent).toContain(BASE_SESSIONS[0].title);
+    expect(window.location.search).toContain(`session=${BASE_SESSIONS[0].id}`);
+    window.history.replaceState({}, "", "/");
+  });
 });
