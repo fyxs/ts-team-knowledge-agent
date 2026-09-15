@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Composer } from "./components/Composer";
+import { FocusView } from "./components/FocusView";
 import { MessageList } from "./components/MessageList";
 import { Modal } from "./components/Modal";
 import { SessionDock } from "./components/SessionDock";
@@ -33,6 +34,26 @@ export default function App() {
     setPendingDeleteId("");
     void removeSession(id);
   }, [pendingDeleteId, removeSession]);
+
+  /** 正在集中阅读的那条答案 id。范围就是一条答案，不涉及其它回答块。 */
+  const [focusedId, setFocusedId] = useState<number | null>(null);
+
+  const focused = useMemo(() => {
+    if (focusedId === null) return null;
+    const index = messages.findIndex((message) => message.id === focusedId);
+    const message = index >= 0 ? messages[index] : undefined;
+    if (!message || message.kind !== "answer") return null;
+    // 头部显示这个问题：往上找最近的一条用户消息，比只写「集中阅读」更能说明在看什么。
+    let question = "";
+    for (let i = index - 1; i >= 0; i -= 1) {
+      const earlier = messages[i];
+      if (earlier.kind === "user") {
+        question = earlier.content;
+        break;
+      }
+    }
+    return { message, question };
+  }, [focusedId, messages]);
 
   const handleSend = useCallback(
     (question: string) => {
@@ -117,7 +138,7 @@ export default function App() {
             </div>
             <span className="model-chip">检索 + 引用</span>
           </div>
-          <MessageList messages={messages} />
+          <MessageList messages={messages} onExpand={setFocusedId} />
           <Composer busy={busy} onSend={handleSend} onStop={stop} />
         </div>
       </section>
@@ -149,6 +170,10 @@ export default function App() {
           </p>
           <p className="confirm-hint">会话保存在本机，删除后无法恢复。</p>
         </Modal>
+      )}
+
+      {focused && (
+        <FocusView message={focused.message} question={focused.question} onClose={() => setFocusedId(null)} />
       )}
     </main>
   );

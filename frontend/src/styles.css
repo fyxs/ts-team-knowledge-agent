@@ -165,9 +165,10 @@ body{
 
 /* ── 集中阅读视图 ────────────────────────────────────────────────────
    长答案用：整屏铺满，把顶栏、会话列表和面板内边距让出来换高度——正文列宽本
-   来就够（896 是阅读宽度，不该再宽），缺的是竖向空间。正文仍复用 .messages /
-   .message / .markdown-body / .citation，不另起一套排版。保留输入区：读完接着
-   问是这个产品的常态，切成只读反而打断环路。 */
+   来就够（896 是阅读宽度，不该再宽），缺的是竖向空间。正文复用同一套 .message /
+   .markdown-body / .citation，不另起一套排版。
+   不放输入区：这个视图的范围是「一条答案」，从这里提问会让「正在看哪条」变得
+   含糊；退出只要一个 Esc，主视图里接着问更顺，底部那 90px 也该还给正文。 */
 .focus-view{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;background:var(--bg);padding:var(--space-6) var(--container-gutter-desktop)}
 .focus-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--border)}
 .focus-head-main{display:flex;align-items:baseline;gap:var(--space-3);min-width:0}
@@ -175,10 +176,14 @@ body{
 .focus-close{flex:none;width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg-2);font-size:var(--text-base);line-height:1;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .focus-close:hover{background:var(--accent-hover);color:var(--fg)}
 .focus-close:focus-visible{outline:none;box-shadow:var(--focus-ring)}
-/* 滚动区直接复用 .messages：它已经在滚动条规则组里，不新增一套。 */
-.focus-view .messages{padding:var(--space-6) 0}
-.focus-doc{width:100%;max-width:var(--content-max);margin:0 auto}
-.focus-view .composer{width:100%;max-width:var(--content-max);margin:var(--space-4) auto 0}
+/* 滚动区直接复用 .messages：它已经在滚动条规则组里，不新增一套。
+   只补上内边距——下边由 .focus-view 自己的内边距兜，再叠一层就比上边多一倍。 */
+.focus-view .messages{padding:var(--space-6) 0 0}
+.focus-doc{width:100%;max-width:var(--content-max);margin:0 auto;display:flex;flex-direction:column}
+/* 卡片撑满可用高度：只裹住内容的话，下面空一大片，看着像被截了一块。
+   flex:1 0 auto —— 内容短时撑满，内容长时不压缩、回退成随内容增长，由 .messages 滚动。 */
+.focus-view .focus-doc,
+.focus-view .message{flex:1 0 auto}
 .message-body{font-size:var(--text-sm);line-height:var(--leading-body);white-space:pre-wrap}
 .message-user{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--accent-on);border-color:var(--border-soft)}
 .message-user .message-label{color:var(--fg-2)}

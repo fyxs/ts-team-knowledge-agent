@@ -698,4 +698,45 @@ describe("agent chat shell", () => {
     expect(testSessions[0].id).not.toBe("s-env");
     expect(container?.querySelectorAll(".session-item").length).toBe(1);
   });
+
+  it("opens one answer in the focus view and returns with the close button", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const textarea = container?.querySelector("textarea") as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(textarea, "前端编码规范里对环境变量有什么要求？");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".composer button") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    await act(async () => {
+      (container?.querySelector(".message-open") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const view = container?.querySelector(".focus-view");
+    expect(view).not.toBeNull();
+    // 头部显示的是问题本身，比只写「集中阅读」更能说明在看哪一段
+    expect(view?.querySelector("h1")?.textContent).toBe("前端编码规范里对环境变量有什么要求？");
+    // 只呈现这一条答案，且视图内不再出现「全屏」入口——已经在里面了
+    expect(view?.querySelectorAll(".message-assistant").length).toBe(1);
+    expect(view?.querySelector(".message-open")).toBeNull();
+    // 集中阅读是读的地方，不带输入区
+    expect(view?.querySelector(".composer")).toBeNull();
+
+    await act(async () => {
+      (view?.querySelector(".focus-close") as HTMLButtonElement).click();
+    });
+    await flush();
+    expect(container?.querySelector(".focus-view")).toBeNull();
+  });
 });

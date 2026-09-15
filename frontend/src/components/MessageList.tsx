@@ -1,9 +1,15 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../hooks/useAgentChat";
-import { MarkdownView } from "./MarkdownView";
+import { AnswerArticle } from "./AnswerArticle";
 import { ProcessBlock } from "./ProcessBlock";
 
-export function MessageList({ messages }: { messages: ChatMessage[] }) {
+type Props = {
+  messages: ChatMessage[];
+  /** 把某条答案切到集中阅读视图。 */
+  onExpand: (id: number) => void;
+};
+
+export function MessageList({ messages, onExpand }: Props) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // 内容增长时保持在底部：真正的滚动发生在消息区内部。
@@ -43,23 +49,15 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
         }
         if (message.kind === "answer") {
           return (
-            <article className="message message-assistant" key={message.id}>
-              <div className="message-label">知识 Agent</div>
-              {!message.retrieved && (
-                <p className="unretrieved-note">本次回答未检索知识库，请谨慎采纳。</p>
-              )}
-              <MarkdownView content={message.content} />
-              {message.citations.length > 0 && (
-                <div className="citation">
-                  <div className="citation-title">来源（{message.citations.length}）</div>
-                  <ul>
-                    {message.citations.map((citation) => (
-                      <li key={citation}>{citation}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </article>
+            <AnswerArticle
+              key={message.id}
+              message={message}
+              action={
+                <button type="button" className="message-open" onClick={() => onExpand(message.id)}>
+                  全屏
+                </button>
+              }
+            />
           );
         }
         return (
