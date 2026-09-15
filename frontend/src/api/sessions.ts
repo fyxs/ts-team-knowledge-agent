@@ -58,3 +58,20 @@ export async function deleteSession(sessionId: string): Promise<void> {
     await fetch(`/api/v1/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
   );
 }
+
+export type SessionHistoryHit = {
+  session_id: string;
+  session_title: string;
+  message_id: number;
+  kind: string;
+  snippet: string;
+  updatedAt: number;
+};
+
+export async function searchSessionHistory(query: string, limit = 20): Promise<SessionHistoryHit[]> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const data = await readJson<{ hits?: SessionHistoryHit[] }>(
+    await fetch(`/api/v1/sessions/search?${params.toString()}`),
+  );
+  return data.hits ?? [];
+}

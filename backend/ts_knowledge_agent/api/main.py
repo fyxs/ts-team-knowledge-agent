@@ -162,6 +162,24 @@ def create_session() -> dict:
         store.close()
 
 
+@app.get("/api/v1/sessions/search")
+def search_session_history(q: str = "", limit: int = 20) -> dict:
+    """在会话历史里按关键词检索，返回命中的会话、消息与上下文片段。"""
+
+    query = (q or "").strip()
+    if not query:
+        return {"query": "", "hits": []}
+    settings = load_settings()
+    store = SessionStore(session_database_path(settings.working_directory))
+    try:
+        return {
+            "query": query,
+            "hits": store.search_messages(query, limit=max(1, min(limit, 100))),
+        }
+    finally:
+        store.close()
+
+
 @app.get("/api/v1/sessions/{session_id}/messages")
 def session_messages(session_id: str) -> dict:
     settings = load_settings()
