@@ -109,6 +109,7 @@ logs/*.log                  api 37KB · scheduled 37KB 线性增长   单文件�
 2. 用户数据（会话历史）**不纳入自动清理**（用户 2026-09-15 明确）：由用户自行决定，已提供单条删除入口；清理命令不得触碰 sessions.sqlite3
 3. 使用埋点长期保留（用户 2026-09-15 明确）：它是检索优化唯一的原料；体积过大时压缩，不删除
 4. 清理必须可审计：每次清理写 logs/prune-runs.jsonl（删了什么、依据哪个上限、释放多少字节）
+5. 执行入口：`ts-team-kb prune`（默认只出计划，`--apply` 才真正删除；上限参数 --keep-inspection / --keep-evaluation / --runs-days / --log-max-mb / --log-keep）
 ```
 
 治理目录的保留上限已由代码保证：`publish_inspection_report` 走 `prune_inspection_reports`，

@@ -36,6 +36,7 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.retention import apply_prune, build_prune_plan
 from ts_knowledge_agent.services.usage import (
     TraceCollector,
     append_trace,
@@ -150,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("start", "stop", "restart", "status"):
         service_sub.add_parser(action_name)
     inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
+    prune = sub.add_parser("prune")
+    prune.add_argument("--keep-inspection", type=int, default=30)
+    prune.add_argument("--keep-evaluation", type=int, default=30)
+    prune.add_argument("--runs-days", type=int, default=365)
+    prune.add_argument("--log-max-mb", type=int, default=10)
+    prune.add_argument("--log-keep", type=int, default=2)
+    prune.add_argument("--apply", action="store_true", help="真正执行清理（默认只出计划）")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -469,6 +477,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not args.json:
                 print(f"governance={published}")
         return 1 if report.blocking else 0
+    if args.command == "prune":
+        settings = Settings.from_env()
+        plan = build_prune_plan(
+            settings.working_directory,
+            keep_inspection=args.keep_inspection,
+            keep_evaluation=args.keep_evaluation,
+            runs_days=args.runs_days,
+            log_max_bytes=args.log_max_mb * 1024 * 1024,
+            log_keep=args.log_keep,
+        )
+        print(f"delete={len(plan.delete)} rotate={len(plan.rotate)} archive_months={len(plan.archive_months)}"
+              f" freed={plan.freed_bytes}B kept={plan.kept}")
+        for path in plan.delete:
+            print(f"  - {path.name}")
+        if not args.apply:
+            print("dry-run：未删除任何文件（加 --apply 才执行）")
+            return 0
+        record = apply_prune(settings.working_directory, plan, log_keep=args.log_keep)
+        print(f"applied deleted={len(record['deleted'])} rotated={len(record['rotated'])}"
+              f" frozen={len(record['frozen_protected'])} audit=logs/prune-runs.jsonl")
+        return 0
+
     if args.command == "schemas":
         for path in write_schema_files(args.output):
             print(path)
