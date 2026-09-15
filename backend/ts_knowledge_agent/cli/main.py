@@ -37,8 +37,11 @@ from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
 from ts_knowledge_agent.services.evaluation import (
+    DEFAULT_EVALUATION_INTERVAL_MINUTES,
+    append_evaluation_run,
     evaluate_citations,
     evaluate_retrieval,
+    is_evaluation_due,
     load_cases,
     write_evaluation_report,
 )
@@ -128,6 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--limit", type=int, default=10)
     evaluate.add_argument("--max-steps", type=int, default=None)
     evaluate.add_argument("--publish", action="store_true", help="把评测报告发布到共享仓治理目录")
+    evaluate.add_argument("--if-due", action="store_true", help="距上次评测达到间隔时才执行")
+    evaluate.add_argument("--interval-minutes", type=int, default=DEFAULT_EVALUATION_INTERVAL_MINUTES)
     service = sub.add_parser("service")
     service.add_argument("--port", type=int, default=DEFAULT_WEB_PORT)
     service_sub = service.add_subparsers(dest="service_action")
@@ -358,6 +363,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "evaluate":
         question_set = args.question_set or (Path(__file__).resolve().parents[3] / "evaluation" / "knowledge-questions.json")
         cases = load_cases(question_set)
+        if getattr(args, "if_due", False) and not is_evaluation_due(settings.working_directory, args.interval_minutes):
+            print(f"skipped=not_due interval_minutes={args.interval_minutes}")
+            return 0
         payload: dict = {
             "question_set": str(question_set),
             "mode": args.mode,
@@ -373,6 +381,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 payload["citations"] = evaluate_citations(
                     settings, cases, provider, max_steps=args.max_steps or settings.model_max_steps)
         path = write_evaluation_report(settings.working_directory, payload)
+        append_evaluation_run(settings.working_directory, payload)
         if "retrieval" in payload:
             print("retrieval_nl " + json.dumps(payload["retrieval"]["natural_language"], ensure_ascii=False))
             if payload["retrieval"]["keywords"]:

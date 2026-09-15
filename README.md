@@ -233,3 +233,15 @@ git checkout -- <path>                      # 用仓库版本覆盖本地
 ```
 
 `git ls-files -v <path>` 输出以 `S` 开头即表示当前处于跳过状态。
+## 巡检与评测的任务归属
+
+```text
+用户侧（成员机器）  ts-team-kb init 会安装「定时扫描 + 本地服务」两个计划任务，
+                    这是日常使用所需
+维护侧（维护机）    巡检与评测不安装到成员机器；维护机用
+                    scripts\install-windows-tasks.ps1 -IncludeMaintenance 启用
+                    · 每日巡检（结构层，不调模型）
+                    · 每周评测（内容层，调模型，静默采集并发布报告）
+```
+
+两部分都按 `--if-due` 判定到期，并通过 `StartWhenAvailable` 在关机/休眠后补跑一次。

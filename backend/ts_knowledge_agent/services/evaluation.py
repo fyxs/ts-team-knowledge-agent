@@ -201,3 +201,61 @@ def write_evaluation_report(working_directory: Path, payload: dict) -> Path:
     stamped.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "evaluation-latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return stamped
+
+EVALUATION_RUNS_FILE = "evaluation-runs.jsonl"
+DEFAULT_EVALUATION_INTERVAL_MINUTES = 10080
+
+
+def _evaluation_runs_path(working_directory: Path) -> Path:
+    return Path(working_directory) / "logs" / EVALUATION_RUNS_FILE
+
+
+def append_evaluation_run(working_directory: Path, payload: dict) -> Path:
+    """记录一次评测的摘要，供到期判定与趋势查看。"""
+
+    path = _evaluation_runs_path(working_directory)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "mode": payload.get("mode"),
+        "question_set": payload.get("question_set"),
+        "retrieval": (payload.get("retrieval") or {}).get("natural_language"),
+        "citations": {key: value for key, value in (payload.get("citations") or {}).items() if key != "results"},
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return path
+
+
+def last_evaluation_started_at(working_directory: Path) -> datetime | None:
+    path = _evaluation_runs_path(working_directory)
+    if not path.is_file():
+        return None
+    for line in reversed(path.read_text(encoding="utf-8", errors="replace").splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line).get("started_at")
+        except json.JSONDecodeError:
+            continue
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            continue
+    return None
+
+
+def is_evaluation_due(working_directory: Path, interval_minutes: int = DEFAULT_EVALUATION_INTERVAL_MINUTES) -> bool:
+    """距上次评测达到间隔才算到期；没有历史记录视为到期。"""
+
+    last = last_evaluation_started_at(working_directory)
+    if last is None:
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    elapsed = (datetime.now(timezone.utc) - last).total_seconds() / 60.0
+    return elapsed >= float(interval_minutes)
+

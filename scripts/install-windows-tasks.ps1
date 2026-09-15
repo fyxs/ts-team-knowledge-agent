@@ -3,7 +3,9 @@
     [string]$TaskUser = '',
     [int]$ScanEveryMinutes = 5,
     [string]$InspectionDailyAt = '08:30',
-    [int]$WebPort = 8088
+    [string]$EvaluationWeeklyAt = '09:00',
+    [int]$WebPort = 8088,
+    [switch]$IncludeMaintenance
 )
 
 # Install (or refresh) launchers and scheduled tasks on a Windows machine.
@@ -16,15 +18,17 @@ $cli = Join-Path $root '.venv\Scripts\ts-team-kb.exe'
 if (-not (Test-Path -LiteralPath $cli)) { Write-Output ('cli missing, create the venv first: ' + $cli); exit 1 }
 if (-not $TaskUser) { $TaskUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name }
 
+$pointerPath = Join-Path $root '.ts-kb-workspace'
 if ($Workspace -and (Test-Path -LiteralPath $Workspace -PathType Leaf)) { $configPath = $Workspace }
 elseif ($Workspace) { $configPath = Join-Path $Workspace 'ts-kb.json' }
+elseif (Test-Path -LiteralPath $pointerPath) { $configPath = (Get-Content -LiteralPath $pointerPath -Raw).Trim() }
 else { $configPath = Join-Path $root 'ts-kb.json' }
 if (-not (Test-Path -LiteralPath $configPath)) { Write-Output ('config not found: ' + $configPath); exit 1 }
 $work = Split-Path -Parent $configPath
 New-Item -ItemType Directory -Force -Path (Join-Path $work 'logs') | Out-Null
 
 # Pointer file: lets the runner scripts find the workspace without env vars.
-$pointer = Join-Path $root '.ts-kb-workspace'
+$pointer = $pointerPath
 Set-Content -LiteralPath $pointer -Value $configPath -Encoding Default
 
 # Service launcher (ANSI so non-ASCII paths survive)
@@ -53,7 +57,10 @@ function New-Launcher {
 }
 
 $vbsScheduled = New-Launcher 'run-scheduled-hidden.vbs' (Join-Path $root 'scripts\run-scheduled.ps1')
-$vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
+$vbsInspection = $null
+if ($IncludeMaintenance) {
+    $vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
+}
 $vbsWeb = New-Launcher 'run-web-service-hidden.vbs' (Join-Path $root 'scripts\run-web-service.ps1')
 
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -63,18 +70,32 @@ $a1 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsSchedu
 $t1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentScheduler' -Action $a1 -Trigger $t1 -Principal $principal -Settings $settings -Force | Out-Null
 
-$a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
-$t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
-Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
+if ($IncludeMaintenance) {
+    $a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
+    $t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
+    Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
+}
+
+$vbsEvaluation = $null
+if ($IncludeMaintenance) {
+    $vbsEvaluation = New-Launcher 'run-evaluation-hidden.vbs' (Join-Path $root 'scripts\run-evaluation.ps1')
+    $a4 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsEvaluation + '"')
+    $t4 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At $EvaluationWeeklyAt
+    Register-ScheduledTask -TaskName 'TSKnowledgeAgentEvaluation' -Action $a4 -Trigger $t4 -Principal $principal -Settings $settings -Force | Out-Null
+}
 
 $a3 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsWeb + '"')
 $t3 = New-ScheduledTaskTrigger -AtLogOn -User $TaskUser
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentWebService' -Action $a3 -Trigger $t3 -Principal $principal -Settings $settings -Force | Out-Null
 
-foreach ($n in 'TSKnowledgeAgentScheduler','TSKnowledgeAgentInspection','TSKnowledgeAgentWebService') {
+$installed = @('TSKnowledgeAgentScheduler')
+if ($IncludeMaintenance) { $installed += 'TSKnowledgeAgentInspection'; $installed += 'TSKnowledgeAgentEvaluation' }
+$installed += 'TSKnowledgeAgentWebService'
+foreach ($n in $installed) {
     $t = Get-ScheduledTask -TaskName $n
     Write-Output ($n + ' state=' + $t.State + ' user=' + $t.Principal.UserId + ' trigger=' + $t.Triggers[0].CimClass.CimClassName + ' swa=' + $t.Settings.StartWhenAvailable)
 }
 Write-Output ('project=' + $root)
 Write-Output ('workspace=' + $work)
 Write-Output ('pointer=' + $pointer)
+Write-Output ('maintenance_tasks=' + [string]$IncludeMaintenance)
