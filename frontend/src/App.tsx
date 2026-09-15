@@ -81,7 +81,7 @@ export default function App() {
 
         <div className="chat-panel">
           <div className="chat-heading">
-            <div>
+            <div className="chat-heading-main">
               <span className="eyebrow">KNOWLEDGE CHAT</span>
               <h1>用团队知识回答问题</h1>
             </div>
