@@ -59,6 +59,17 @@ def member_governance_directory(repository_root: Path, member: str) -> Path:
     return Path(repository_root) / GOVERNANCE_DIRECTORY / _member_name(member)
 
 
+def is_knowledge_document(relative_posix: str) -> bool:
+    """判断仓库内相对路径是否为知识文档：空间说明用 README 不算知识。"""
+
+    if relative_posix == "members/README.md":
+        return False
+    parts = relative_posix.split("/")
+    if len(parts) == 3 and parts[0] == MEMBERS_DIRECTORY and parts[2] == "README.md":
+        return False
+    return True
+
+
 def _write_readme(directory: Path, text: str) -> None:
     readme = directory / "README.md"
     if not readme.is_file():

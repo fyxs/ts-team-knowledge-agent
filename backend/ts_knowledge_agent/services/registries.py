@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.repositories.state_store import StateStore
+from ts_knowledge_agent.services.member_space import is_knowledge_document
 from ts_knowledge_agent.schemas import KnowledgeEntry, ReviewRecord, SourceRegistration
 
 
@@ -75,6 +76,8 @@ def knowledge_entries(settings: Settings) -> list[KnowledgeEntry]:
     entries: list[KnowledgeEntry] = []
     for path in sorted(root.rglob("*.md")):
         relative = path.relative_to(repo).as_posix()
+        if not is_knowledge_document(relative):
+            continue
         content = path.read_text(encoding="utf-8", errors="replace")
         title = next((line[2:].strip() for line in content.splitlines() if line.startswith("# ")), path.stem)
         images = path.parent / "images"
