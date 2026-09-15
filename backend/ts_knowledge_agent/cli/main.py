@@ -19,6 +19,7 @@ from ts_knowledge_agent.config import (
     initialize_working_directory,
 )
 from ts_knowledge_agent.repositories.state_store import StateStore
+from ts_knowledge_agent.services.governance import publish_inspection_report
 from ts_knowledge_agent.services.inspection import inspect_knowledge_base, write_inspection_report
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
@@ -94,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     inspect = sub.add_parser("inspect")
     inspect.add_argument("--per-type", type=int, default=6)
     inspect.add_argument("--json", action="store_true")
+    inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -297,6 +299,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             for kind, count in report.issue_counts.items():
                 print(f"  {kind}: {count}")
             print(f"report={path}")
+        if not args.no_publish:
+            published = publish_inspection_report(
+                settings.shared_knowledge_repository_directory,
+                settings.personal_workspace,
+                payload,
+            )
+            if not args.json:
+                print(f"governance={published}")
         return 1 if report.blocking else 0
     if args.command == "schemas":
         for path in write_schema_files(args.output):

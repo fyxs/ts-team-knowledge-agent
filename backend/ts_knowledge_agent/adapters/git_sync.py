@@ -16,6 +16,18 @@ class GitSyncError(RuntimeError):
     pass
 
 
+STAGED_PATHS = ("members", "governance")
+"""随同步提交的顶层目录：成员知识与成员治理记录。"""
+
+
+def _stage(repo: Path) -> None:
+    """暂存已存在的受管目录，避免 pathspec 不存在时报错。"""
+
+    paths = [name for name in STAGED_PATHS if (repo / name).exists()]
+    if paths:
+        _git(repo, "add", *paths)
+
+
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -48,7 +60,7 @@ def commit_and_push(repo: Path, message: str) -> SyncResult:
         return SyncResult("not_initialized", message=str(repo))
     if not _git(repo, "status", "--porcelain"):
         return SyncResult("clean")
-    _git(repo, "add", "members")
+    _stage(repo)
     if not _git(repo, "diff", "--cached", "--name-only"):
         return SyncResult("clean")
     _git(repo, "commit", "-m", message)
@@ -70,7 +82,7 @@ def sync_repository(repo: Path, message: str) -> SyncResult:
         return SyncResult("not_initialized", message=str(repo))
     try:
         if _git(repo, "status", "--porcelain"):
-            _git(repo, "add", "members")
+            _stage(repo)
             if _git(repo, "diff", "--cached", "--name-only"):
                 _git(repo, "commit", "-m", message)
         _git(repo, "fetch", "origin")
