@@ -19,6 +19,7 @@ from ts_knowledge_agent.config import (
     initialize_working_directory,
 )
 from ts_knowledge_agent.repositories.state_store import StateStore
+from ts_knowledge_agent.services.inspection import inspect_knowledge_base, write_inspection_report
 from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
@@ -90,6 +91,9 @@ def build_parser() -> argparse.ArgumentParser:
     config_key = config_sub.add_parser("set-key")
     config_key.add_argument("--from-file", dest="key_file", help="从文件读取密钥（适合不方便交互输入时）")
     config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
+    inspect = sub.add_parser("inspect")
+    inspect.add_argument("--per-type", type=int, default=6)
+    inspect.add_argument("--json", action="store_true")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -282,6 +286,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"api key stored at {path} (never commit this file)")
             return 0
         parser.error("config requires an action: show | set | set-key")
+    if args.command == "inspect":
+        report = inspect_knowledge_base(settings, per_type=args.per_type)
+        path = write_inspection_report(settings.working_directory, report)
+        payload = report.to_dict()
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"sampled={report.sampled} clean={report.clean} blocking={report.blocking}")
+            for kind, count in report.issue_counts.items():
+                print(f"  {kind}: {count}")
+            print(f"report={path}")
+        return 1 if report.blocking else 0
     if args.command == "schemas":
         for path in write_schema_files(args.output):
             print(path)
