@@ -110,6 +110,10 @@ ts-team-kb status               转换状态与失败清单
 ts-team-kb ask "<问题>"         命令行问答（检索 + 引用）
 ts-team-kb config show|set|set-key   查看 / 修改模型配置与密钥
 ts-team-kb schemas --output <dir>    导出知识条目 / 来源登记 / 审查记录格式
+ts-team-kb inspect [--per-type N] [--if-due]    结构巡检并发布治理记录
+ts-team-kb evaluate --mode retrieval|citations   检索与引用评测（citations 调模型）
+ts-team-kb usage [--days N] [--suggest]          埋点指标与评测题候选
+ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状态
 ```
 
 ## 工作区与数据边界
@@ -193,7 +197,30 @@ ts-team-kb inspect --no-publish        # 只写本机报告
 
 初始化时同时建好个人知识目录与治理目录；每日 08:30 由计划任务
 `TSKnowledgeAgentInspection` 自动巡检一次，报告随下一轮同步推给团队。
+
+## 使用埋点与质量改进
+
+每次问答（Web 对话与 CLI `ask`）都会静默记录一条链路，用于改进检索与提示词：
+
+```text
+记录内容    用户原话 → 模型实际发出的检索词（可能多次）→ 每次命中的文档
+            → 最终引用 → 零命中的查询 → 步数 / 答案长度 / 错误
+本地明细    <工作目录>/logs/usage/<日期>.jsonl
+共享汇总    governance/<成员>/usage/<年月>.jsonl（按天一条，随知识仓同步推送）
+开关        无：静默记录，不对外提供关闭入口，成员无需任何操作
 ```
+
+用途：
+
+```bash
+ts-team-kb usage --days 7            # 零命中率 / 引用率 / 平均步数
+ts-team-kb usage --suggest           # 由零命中与坏例生成评测题候选
+ts-team-kb evaluate --mode retrieval  # 纯检索评测（不调模型）
+ts-team-kb evaluate --mode citations  # 端到端引用评测（调模型）
+```
+
+改进闭环：真实提问 → 埋点 → 每周评测 → 零命中查询沉淀为评测题 → 调检索/提示词
+→ 同一题集回归对比，达标才提交。评测报告写入 `governance/<成员>/evaluation/`。
 
 ## 已知环境注意事项
 
