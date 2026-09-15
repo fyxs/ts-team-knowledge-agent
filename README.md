@@ -125,6 +125,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 源目录            只读；应用不移动、不覆盖、不删除源文件
 工作目录          配置、运行日志、反馈、密钥、隔离产物
 共享知识仓        Git 仓库，知识内容与登记文件
+会话与历史        本机 SQLite：<工作目录>/data/sessions.sqlite3，属个人使用痕迹，不进共享仓
 ```
 
 关键约定：
@@ -133,6 +134,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 知识输出结构      <文档名>/<文档名>.md + images/（Excel 另有 sheets/）
 登记文件          members/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
 索引与状态        SQLite 只在本机，永不进入 Git
+会话消息结构      user / process / answer / error 四类；answer 保留检索引用与工具过程
 密钥              <工作目录>/secrets/model.key，不在任何 Git 仓库内
 ```
 
@@ -224,6 +226,31 @@ ts-team-kb evaluate --mode citations  # 端到端引用评测（调模型）
 
 改进闭环：真实提问 → 埋点 → 每周评测 → 零命中查询沉淀为评测题 → 调检索/提示词
 → 同一题集回归对比，达标才提交。评测报告写入 `governance/<成员>/evaluation/`。
+
+## 会话与历史消息
+
+```text
+存储位置    <工作目录>/data/sessions.sqlite3（本机 SQLite，不进入共享知识仓）
+保存内容    用户提问、工具过程（步骤名与摘要）、回答（正文 + 检索引用 + 步数 + 是否检索）、错误
+不保存      凭据、源文件内容；回答正文只落本机
+```
+
+接口：
+
+```text
+GET  /api/v1/sessions                    会话列表（id、title、updatedAt 毫秒时间戳）
+POST /api/v1/sessions                    新建会话
+GET  /api/v1/sessions/{id}/messages      历史消息（含引用与工具过程，可直接回放）
+POST /api/v1/chat、/api/v1/chat/stream   接受 session_id，落库用户消息、工具过程与回答
+```
+
+行为约定：
+
+```text
+标题        会话首条提问自动成为标题（截断 40 字）；前端刷新列表后以服务端为准
+历史加载    切换会话时按需拉取一次；已加载过的会话不再覆盖，避免抹掉在途消息
+边界        会话属于个人使用痕迹，接口只读本机库，不参与检索索引与共享仓同步
+```
 
 ## 已知环境注意事项
 
