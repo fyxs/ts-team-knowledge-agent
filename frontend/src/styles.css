@@ -58,7 +58,8 @@ body{
 .composer textarea:focus-visible{outline:none}
 
 /* ---------- 对话面板 ---------- */
-.chat-layout{width:100%;flex:1;min-height:0;display:grid;grid-template-columns:var(--session-panel-w) minmax(0,1fr);gap:var(--space-5)}
+/* position:relative 给收起态的悬浮按钮组当定位基准 */
+.chat-layout{position:relative;width:100%;flex:1;min-height:0;display:grid;grid-template-columns:var(--session-panel-w) minmax(0,1fr);gap:var(--space-5)}
 .chat-panel{
   display:flex;flex-direction:column;width:100%;
   flex:1;min-height:0;
@@ -77,12 +78,17 @@ body{
 /* 与 chat-panel 同一种卡片语言：surface 底 + 1px 边框 + radius-lg + elev-raised，
    层级由边框表达，阴影只补接触感。 */
 .session-panel{display:flex;flex-direction:column;min-height:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-raised);overflow:hidden}
-.session-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-4);border-bottom:1px solid var(--border)}
-.session-head-title{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:600;letter-spacing:var(--tracking-display);color:var(--meta);text-transform:uppercase}
+.session-head{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4);border-bottom:1px solid var(--border)}
+.session-head-title{flex:1 1 auto;min-width:0;margin:0;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:600;letter-spacing:var(--tracking-display);color:var(--meta);text-transform:uppercase}
 .session-new{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);color:var(--fg);padding:var(--space-1) var(--space-3);font:inherit;font-size:var(--text-xs);cursor:pointer;white-space:nowrap;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
 .session-new:hover{background:var(--accent-hover);border-color:var(--border-soft)}
 .session-new:active{background:var(--accent-active)}
 .session-new:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 折叠控件：只在宽屏出现（窄屏由抽屉与顶栏按钮负责），与「新建」并排待在面板头部 */
+.session-collapse{display:none;flex:none;width:24px;height:24px;place-items:center;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--meta);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.session-collapse:hover{background:var(--accent-hover);color:var(--fg)}
+.session-collapse:active{background:var(--accent-active)}
+.session-collapse:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .session-search{padding:var(--space-3) var(--space-4) 0}
 .session-search input{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);color:var(--fg);font:inherit;font-size:var(--text-xs)}
 .session-search input::placeholder{color:var(--meta)}
@@ -102,6 +108,14 @@ body{
 .session-item[aria-current="true"] .session-meta{color:var(--fg-2)}
 .session-item[aria-current="true"]:hover{background:var(--accent-hover)}
 .session-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:var(--space-3) var(--space-4);border-top:1px solid var(--border);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+
+/* 会话列收起后浮出的按钮组：贴着对话面板左缘、与面板顶部齐平。
+   只在收起态渲染，所以锚在内容上也不会出现「切换时按钮横向跳走」。 */
+.session-dock{position:absolute;right:100%;top:0;margin-right:var(--space-4);display:flex;flex-direction:column;gap:var(--space-1);padding:var(--space-1);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-float)}
+.dock-button{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:var(--radius-md);background:transparent;color:var(--fg-2);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.dock-button:hover{background:var(--accent-hover);color:var(--fg)}
+.dock-button:active{background:var(--accent-active)}
+.dock-button:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* 会话列只在窄屏折叠为抽屉，由顶栏按钮唤出 */
 .session-toggle{display:none}
@@ -199,15 +213,28 @@ body{
    使消息列维持在接近原来的阅读宽度。 */
 @media (min-width:940px){
   .app-shell{max-width:max(var(--content-max),var(--content-max-sessions))}
+  .session-collapse{display:grid}
+  /* 收起：会话列整个让出去，对话面板居中回原来的阅读宽度 */
+  .app-shell.is-collapsed{max-width:var(--content-max)}
+  .app-shell.is-collapsed .chat-layout{grid-template-columns:minmax(0,1fr)}
+  .app-shell.is-collapsed .session-panel{display:none}
 }
 
 /* 窄屏：会话列折叠为抽屉，由顶栏「历史会话」按钮唤出 */
 @media (max-width:939px){
   .chat-layout{grid-template-columns:minmax(0,1fr)}
   .session-toggle{display:inline-flex}
+  .session-dock{display:none}
   .session-panel{position:fixed;top:0;bottom:0;left:0;z-index:60;width:min(var(--session-panel-w),82%);border-radius:0 var(--radius-lg) var(--radius-lg) 0;box-shadow:var(--elev-float);transform:translateX(-100%);transition:transform var(--motion-base) var(--ease-standard)}
   .app-shell.sessions-open .session-panel{transform:none}
   .app-shell.sessions-open .session-overlay{display:block;position:fixed;inset:0;z-index:55;background:var(--overlay)}
+}
+
+/* 收起态但左侧留白不够容纳悬浮组：同样交给顶栏按钮。
+   悬浮组宽 32px + 两侧 padding + var(--space-4) 间距，需要约 56px 留白。 */
+@media (min-width:940px) and (max-width:1007px){
+  .session-dock{display:none}
+  .app-shell.is-collapsed .session-toggle{display:inline-flex}
 }
 
 /* ---------- 窄屏 ---------- */

@@ -69,7 +69,7 @@ agent/prompts、skills       系统提示词与技能
 src/api/agent.ts            接口客户端（SSE 解析、配置读写）
 src/api/sessions.ts         会话列表数据（静态种子；接口就绪后替换为 fetch）
 src/hooks/useAgentChat.ts   对话状态机（消息按会话分开存放）
-src/hooks/useSessions.ts    会话列表状态（选中、搜索、新建、分组）
+src/hooks/useSessions.ts    会话列表状态（选中、搜索、新建、分组、折叠）
 src/hooks/useTheme.ts       主题切换
 src/components/             展示组件（消息、过程块、会话面板、弹窗、设置面板等）
 src/tokens.css              设计体系 token（唯一视觉来源）

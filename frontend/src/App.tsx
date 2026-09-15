@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Composer } from "./components/Composer";
 import { MessageList } from "./components/MessageList";
+import { SessionDock } from "./components/SessionDock";
 import { SessionPanel } from "./components/SessionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { useAgentChat } from "./hooks/useAgentChat";
@@ -8,7 +9,8 @@ import { useSessions } from "./hooks/useSessions";
 import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
-  const { groups, total, activeId, query, setQuery, createSession, selectSession, touchSession } = useSessions();
+  const { groups, total, activeId, query, setQuery, collapsed, createSession, selectSession, touchSession, collapse, expand } =
+    useSessions();
   const { messages, busy, send, stop } = useAgentChat(activeId);
   const { theme, toggle } = useTheme();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -35,8 +37,12 @@ export default function App() {
     [selectSession],
   );
 
+  const shellClass = ["app-shell", collapsed ? "is-collapsed" : "", sessionsOpen ? "sessions-open" : ""]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <main className={`app-shell${sessionsOpen ? " sessions-open" : ""}`}>
+    <main className={shellClass}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">TS</div>
@@ -68,7 +74,10 @@ export default function App() {
           onQueryChange={setQuery}
           onSelect={handleSelect}
           onCreate={handleCreate}
+          onCollapse={collapse}
         />
+
+        {collapsed && <SessionDock onExpand={expand} onCreate={handleCreate} />}
 
         <div className="chat-panel">
           <div className="chat-heading">

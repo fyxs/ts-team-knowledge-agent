@@ -60,11 +60,13 @@ function buildGroups(sessions: SessionSummary[]): SessionGroup[] {
   return buckets.filter((bucket) => bucket.items.length > 0);
 }
 
-/** 历史会话列表状态：选中、搜索、新建，以及会话元信息的就地更新。 */
+/** 历史会话列表状态：选中、搜索、新建、折叠，以及会话元信息的就地更新。 */
 export function useSessions() {
   const [sessions, setSessions] = useState<SessionSummary[]>(SESSIONS_SEED);
   const [activeId, setActiveId] = useState<string>(SESSIONS_SEED[0]?.id ?? "");
   const [query, setQuery] = useState("");
+  /** 宽屏下收起会话列，把宽度让回对话面板；窄屏的抽屉开关另由 sessionsOpen 管理。 */
+  const [collapsed, setCollapsed] = useState(false);
 
   const groups = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -106,14 +108,25 @@ export function useSessions() {
     );
   }, []);
 
+  const collapse = useCallback(() => {
+    setCollapsed(true);
+  }, []);
+
+  const expand = useCallback(() => {
+    setCollapsed(false);
+  }, []);
+
   return {
     groups,
     total: sessions.length,
     activeId,
     query,
     setQuery,
+    collapsed,
     createSession,
     selectSession,
     touchSession,
+    collapse,
+    expand,
   };
 }

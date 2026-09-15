@@ -458,4 +458,56 @@ describe("agent chat shell", () => {
     // 占位标题被首个问题替换
     expect(activeItem()?.textContent).toContain("环境变量怎么读");
   });
+
+  it("collapses the session column into a floating dock and expands it back", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+
+    const shell = () => container?.querySelector(".app-shell");
+    expect(shell()?.classList.contains("is-collapsed")).toBe(false);
+    expect(container?.querySelector(".session-dock")).toBeNull();
+
+    // 面板头部的「折叠」：收起后浮出按钮组
+    await act(async () => {
+      (container?.querySelector(".session-collapse") as HTMLButtonElement).click();
+    });
+    await flush();
+    expect(shell()?.classList.contains("is-collapsed")).toBe(true);
+    const dockButtons = container?.querySelectorAll(".dock-button") ?? [];
+    expect(dockButtons.length).toBe(2);
+    expect(dockButtons[1].getAttribute("aria-label")).toBe("新建对话");
+
+    // 悬浮组的「打开历史面板」：展回去，按钮组撤走
+    await act(async () => {
+      (dockButtons[0] as HTMLButtonElement).click();
+    });
+    await flush();
+    expect(shell()?.classList.contains("is-collapsed")).toBe(false);
+    expect(container?.querySelector(".session-dock")).toBeNull();
+  });
+
+  it("creates a session from the dock without reopening the panel", async () => {
+    stubFetch((url, init) => defaultHandler(url, init));
+    await act(async () => {
+      root?.render(<App />);
+    });
+    await flush();
+    await act(async () => {
+      (container?.querySelector(".session-collapse") as HTMLButtonElement).click();
+    });
+    await flush();
+
+    const before = container?.querySelectorAll(".session-item").length ?? 0;
+    await act(async () => {
+      (container?.querySelectorAll(".dock-button")[1] as HTMLButtonElement).click();
+    });
+    await flush();
+
+    expect(container?.querySelectorAll(".session-item").length).toBe(before + 1);
+    // 快捷新建不该把用户刚收起来的面板又弹开
+    expect(container?.querySelector(".app-shell")?.classList.contains("is-collapsed")).toBe(true);
+  });
 });
