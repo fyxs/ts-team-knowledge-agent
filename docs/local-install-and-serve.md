@@ -125,8 +125,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <项目>\scripts\install-win
 
 第 9 步是**必须**的：任务注册成功只说明计划任务存在，不代表服务在跑、更不代表能问答。
 
-工作目录里除了当前生效的 `run-api.cmd` 与 `run-*-hidden.vbs`，历史上可能残留 `run_serve.cmd`、
-`run_webui.cmd` 之类的旧启动器；判断"哪个在生效"看计划任务的参数指向，不要凭文件名猜。
+工作目录里的启动器分三类：**生效的**是计划任务指向的 `run-api.cmd` 与 `run-*-hidden.vbs`（由安装脚本生成）；**手工可用的**是 `run-api-hidden.vbs`（隐藏启动 Web 服务）、`run_serve.cmd`（前台直接跑 `serve`，8088 端口，便于看报错）、`run_webui.cmd`（前端开发热更新，需要 Node）；名字相近的历史遗留文件已清理。判断"哪个在生效"看计划任务的参数指向，不要凭文件名猜。
 
 ## 开机自启与运维命令
 
