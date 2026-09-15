@@ -241,6 +241,7 @@ ts-team-kb evaluate --mode citations  # 端到端引用评测（调模型）
 GET  /api/v1/sessions                    会话列表（id、title、updatedAt 毫秒时间戳）
 POST /api/v1/sessions                    新建会话
 GET  /api/v1/sessions/{id}/messages      历史消息（含引用与工具过程，可直接回放）
+GET  /api/v1/sessions/search?q=         历史消息全文检索（返回会话、消息类型与命中片段）
 PATCH  /api/v1/sessions/{id}             重命名（body {"title": "..."}；超 20 字自动截断，空标题拒绝）
 DELETE /api/v1/sessions/{id}             删除会话及其全部消息
 POST /api/v1/chat、/api/v1/chat/stream   接受 session_id，落库用户消息、工具过程与回答
