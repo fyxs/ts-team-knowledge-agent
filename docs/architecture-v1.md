@@ -127,6 +127,17 @@ Git 知识仓     知识 Markdown、图片、登记文件、治理报告（gover
 
 原始文件、SQLite、日志、本机配置和模型密钥不进入代码仓库或共享知识仓。
 
+## 状态库与索引
+
+```text
+位置      <知识仓>/data/state.sqlite3（在知识仓目录内，但不入 Git、不随同步上传）
+表        sources       源文件登记与状态（含 quality_warned 告警态）
+          conversions   转换记录（转换器标签、warning_message / error_message）
+          documents     知识条目索引（标题、字节数、图片数、来源 SHA-256）
+          documents_fts 全文索引（AND 优先 + OR 补齐 + bm25 排序）
+会话库    <工作目录>/data/sessions.sqlite3（见「会话与历史」，本机使用痕迹）
+```
+
 ## 依赖边界
 
 MinerU 运行在**独立环境**中，通过配置项 `mineru_python` 指定解释器；它不作为应用自身的依赖安装，避免把 PyTorch 等重型依赖带进普通运行环境。
