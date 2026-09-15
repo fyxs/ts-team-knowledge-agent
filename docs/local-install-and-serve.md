@@ -168,11 +168,16 @@ Enable-ScheduledTask  -TaskName 'TSKnowledgeAgentScheduler'
 打包进 exe 既不可行也不稳定。因此 exe 模式下 PDF / DOCX / PPTX 转换需要额外制备 MinerU 环境：
 
 ```text
-现状（待补命令）：手动建一个环境并安装，再把解释器路径写进 ts-kb.json 的 mineru_python
-    python -m venv D:\2Work\ts-team-kb-mineru
-    D:\2Work\ts-team-kb-mineru\Scripts\python.exe -m pip install "MinerU[pipeline]"
-    然后 ts-kb.json:  "mineru_python": "D:\\2Work\\ts-team-kb-mineru\\Scripts\\python.exe"
-用 pip / pipx 安装时不需要这一步：MinerU 是普通依赖，随包自带。
+一步制备：ts-team-kb\ts-team-kb.exe setup-mineru
+    · 建专用环境（默认 %LOCALAPPDATA%\ts-team-kb\mineru-env，可用 --path 指定）
+    · 安装 MinerU[pipeline]（含 torch，约 1.1 GB）
+    · 自检（导入 mineru 与 torch 并回报版本）
+    · 把解释器路径写进 ts-kb.json 的 mineru_python
+
+可选：--python <已有解释器> 复用现成环境（不新建、不下载）；
+      --dry-run 只打印将执行的步骤；--no-verify 跳过自检。
+引导解释器优先用随包 tools/ 目录里的 uv，其次 PATH 上的 uv，再次系统 Python；
+都没有时命令会明确提示怎么补。
 ```
 
 > 注：exe 与 pipx 两条路线的差异仅在此处——exe 拿不到进程外的大依赖，pip 装则天然带全。

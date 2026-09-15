@@ -64,6 +64,15 @@ def request(url: str, token: str, *, method: str = "GET", payload: dict | None =
         return error.code, {"error": detail[:400]}
 
 
+def find_asset(release: dict, name: str) -> int | None:
+    """在同名资产已存在时取出其 id（用于先删后传，避免 422）。"""
+
+    for item in release.get("assets", []):
+        if item.get("name") == name:
+            return int(item["id"])
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
@@ -105,7 +114,12 @@ def main() -> int:
         existing = payload["id"]
 
     upload_url = f"https://uploads.github.com/repos/{slug}/releases/{existing}/assets"
+    status, current = request(f"https://api.github.com/repos/{slug}/releases/{existing}", token)
     for asset in assets:
+        stale = find_asset(current, asset.name)
+        if stale is not None:
+            code, _ = request(f"https://api.github.com/repos/{slug}/releases/assets/{stale}", token, method="DELETE")
+            print(f"replace: 删除同名旧资产 {asset.name} -> {code}")
         content_type = "application/zip" if asset.suffix == ".zip" else "application/octet-stream"
         status, payload = request(f"{upload_url}?name={asset.name}", token, method="POST",
                                   upload=(asset, content_type))
