@@ -105,6 +105,11 @@ ts-team-kb schemas --output <dir>    导出知识条目 / 来源登记 / 审查�
 
 ## 运行方式
 
+- 登录自启：计划任务 `TSKnowledgeAgentWebService` 在用户登录后拉起本地 Web 服务
+  （`run-web-service-hidden.vbs` → `scripts/run-web-service.ps1`，端口已占用时直接跳过，可重复执行）。
+- 定时任务错过后唤醒补跑：`TSKnowledgeAgentScheduler` 与 `TSKnowledgeAgentInspection` 均启用
+  `StartWhenAvailable`，并各自按 `--if-due` 判断是否真正执行。
+
 ```text
 自动    本地计划任务定时唤醒，按 scan_interval_minutes（默认 60，下限 5）决定是否执行
 手动    Web 设置面板：立即扫描、拉取 / 推送共享知识仓、调整扫描间隔
