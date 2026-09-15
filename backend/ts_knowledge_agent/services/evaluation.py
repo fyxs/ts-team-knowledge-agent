@@ -99,6 +99,9 @@ def evaluate_retrieval(settings: Settings, cases: list[QuestionCase], limit: int
     }
 
 
+PATH_PATTERN = re.compile(r"members/[^\s\"'<>()\[\]]+\.md")
+
+
 def _distinctive_terms(text: str, minimum: int = 4) -> set[str]:
     terms = {token for token in NUMBER.findall(text)}
     terms |= {run for run in CJK_RUN.findall(text) if len(run) >= minimum}
@@ -121,6 +124,25 @@ def _document_text(settings: Settings, path: str) -> str:
     return target.read_text(encoding="utf-8", errors="replace")
 
 
+def _retrieved_paths(transcript: list[dict] | None) -> set[str]:
+    """从 Agent 会话记录里取出它实际检索到的文档路径。
+
+    引用是否"来自检索"必须对照 Agent 自己看到的结果，而不是评测侧另发的查询。
+    """
+
+    paths: set[str] = set()
+    for message in transcript or []:
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, str):
+            paths.update(PATH_PATTERN.findall(content.replace("\\/", "/").replace("\\\\", "/")))
+        elif isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict):
+                    blob = json.dumps(item, ensure_ascii=False).replace("\\/", "/").replace("\\\\", "/")
+                    paths.update(PATH_PATTERN.findall(blob))
+    return paths
+
+
 def evaluate_citations(settings: Settings, cases: list[QuestionCase], provider, max_steps: int = 8) -> dict:
     """评测引用准确率：是否给出引用、引用是否真实存在、是否来自检索、是否有原文支撑。"""
 
@@ -129,8 +151,7 @@ def evaluate_citations(settings: Settings, cases: list[QuestionCase], provider, 
     for case in cases:
         result = run_agent(settings, case.question, provider, max_steps=max_steps)
         citations = list(dict.fromkeys(result.citations))
-        hits = knowledge_search(settings, case.question, limit=10)
-        retrieved_paths = {hit.path for hit in hits}
+        retrieved_paths = _retrieved_paths(getattr(result, "transcript", None))
         answer_terms = _distinctive_terms(result.answer or "")
 
         per_citation = []

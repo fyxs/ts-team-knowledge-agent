@@ -24,6 +24,7 @@ from ts_knowledge_agent.config import (
 from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.services.governance import publish_inspection_report
 from ts_knowledge_agent.services.member_space import ensure_member_space
+from ts_knowledge_agent.services.governance import publish_evaluation_report
 from ts_knowledge_agent.services.inspection import (
     DEFAULT_INSPECTION_INTERVAL_MINUTES,
     append_inspection_run,
@@ -126,6 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--mode", choices=("retrieval", "citations", "both"), default="both")
     evaluate.add_argument("--limit", type=int, default=10)
     evaluate.add_argument("--max-steps", type=int, default=None)
+    evaluate.add_argument("--publish", action="store_true", help="把评测报告发布到共享仓治理目录")
     service = sub.add_parser("service")
     service.add_argument("--port", type=int, default=DEFAULT_WEB_PORT)
     service_sub = service.add_subparsers(dest="service_action")
@@ -379,6 +381,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             summary = {key: value for key, value in payload["citations"].items() if key != "results"}
             print("citations " + json.dumps(summary, ensure_ascii=False))
         print(f"report={path}")
+        if getattr(args, "publish", False):
+            published = publish_evaluation_report(
+                settings.shared_knowledge_repository_directory, settings.personal_workspace, payload)
+            print(f"governance={published}")
         return 0
 
     if args.command == "service":

@@ -63,3 +63,22 @@ def publish_inspection_report(
     (directory / "inspection-latest.json").write_text(text, encoding="utf-8", newline="\n")
     prune_inspection_reports(history, keep)
     return report_path
+
+def publish_evaluation_report(repository_root: Path, member: str, payload: dict, *, keep: int = 30) -> Path:
+    """发布评测报告到 governance/<成员>/evaluation/ 并保留最近 keep 份。"""
+
+    directory = member_governance_directory(repository_root, member) / "evaluation"
+    directory.mkdir(parents=True, exist_ok=True)
+    document = dict(payload)
+    document["member"] = member
+    document["kind"] = "evaluation"
+    document["published_at"] = datetime.now(timezone.utc).isoformat()
+    text = json.dumps(document, ensure_ascii=False, indent=2)
+    stamped = directory / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
+    stamped.write_text(text, encoding="utf-8")
+    (directory / "evaluation-latest.json").write_text(text, encoding="utf-8")
+    reports = sorted(path for path in directory.glob("*.json") if path.name != "evaluation-latest.json")
+    for stale in reports[:-keep] if keep > 0 else []:
+        stale.unlink(missing_ok=True)
+    return stamped
+
