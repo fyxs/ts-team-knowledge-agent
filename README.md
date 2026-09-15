@@ -241,13 +241,15 @@ ts-team-kb evaluate --mode citations  # 端到端引用评测（调模型）
 GET  /api/v1/sessions                    会话列表（id、title、updatedAt 毫秒时间戳）
 POST /api/v1/sessions                    新建会话
 GET  /api/v1/sessions/{id}/messages      历史消息（含引用与工具过程，可直接回放）
+PATCH  /api/v1/sessions/{id}             重命名（body {"title": "..."}；超 20 字自动截断，空标题拒绝）
+DELETE /api/v1/sessions/{id}             删除会话及其全部消息
 POST /api/v1/chat、/api/v1/chat/stream   接受 session_id，落库用户消息、工具过程与回答
 ```
 
 行为约定：
 
 ```text
-标题        会话首条提问自动成为标题（截断 40 字）；前端刷新列表后以服务端为准
+标题        上限 20 字；首条提问自动成为标题，人工重命名走同一套规范化，前端以服务端为准
 历史加载    切换会话时按需拉取一次；已加载过的会话不再覆盖，避免抹掉在途消息
 边界        会话属于个人使用痕迹，接口只读本机库，不参与检索索引与共享仓同步
 ```
