@@ -86,6 +86,9 @@ $env:TS_KB_CONFIG = "<本机工作目录>\ts-kb.json"
 `TSKnowledgeAgentWebService`（登录自启 Web 服务）。任务均为登录后运行；
 启动失败会写入 `logs/runner-errors.log`，不会静默失败。
 
+维护机若还需要每周评测（内容层，会调用模型），加 `-IncludeMaintenance` 一并注册：
+`scripts\install-windows-tasks.ps1 -IncludeMaintenance`。成员侧不需要，也不必加。
+
 服务控制（安装后随时可用）：
 
 ```powershell
