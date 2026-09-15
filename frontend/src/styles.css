@@ -171,7 +171,10 @@ body{
    含糊；退出只要一个 Esc，主视图里接着问更顺，底部那 90px 也该还给正文。 */
 .focus-view{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;background:var(--bg);padding:var(--space-6) var(--container-gutter-desktop)}
 .focus-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--border)}
-.focus-head-main{display:flex;align-items:baseline;gap:var(--space-3);min-width:0}
+/* 居中对齐而不是基线：这里的 eyebrow 是汉字，字形铺满 em 框、没有升部降部，
+   基线对齐会让它比标题低 2px（(16-12)/2）。主头部 .chat-heading-main 的 eyebrow
+   是拉丁字母，有升部降部，那里保持基线才对——对齐方式跟着内容走。 */
+.focus-head-main{display:flex;align-items:center;gap:var(--space-3);min-width:0}
 .focus-head-main h1{margin:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .focus-close{flex:none;width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg-2);font-size:var(--text-base);line-height:1;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .focus-close:hover{background:var(--accent-hover);color:var(--fg)}
