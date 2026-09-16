@@ -95,6 +95,22 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 5. 需要修改这类文件时，交给**交互式白名单工具**（编辑器、资源管理器），或由用户在本地执行。
 6. 若已误写：仓库版本完好，用 `git show HEAD:<path>` 取出原文，交用户用编辑器覆盖保存。
 
+### 确需更新 skip-worktree 文件时的正确步骤
+
+这类文件常因 DLP 加壳而被排除在正常跟踪之外（`git ls-files -v` 显示 `S`）。
+确实需要更新它的内容时：
+
+1. 先确认文件**当前可以正常读写**（DLP 锁已解除）。若仍被加壳，只能交交互式白名单工具处理，
+   不要用脚本变通写入。
+2. `git update-index --no-skip-worktree <path>` —— 先摘掉标记，否则 git 看不到任何改动
+   （摘掉后 `git status` 会立刻显示 `M`）。
+3. 正常 `git add` 与 `git commit`。
+4. 提交完成后**把标记按原样放回**：`git update-index --skip-worktree <path>`
+   —— 保持环境原有的处置，不要顺手取消。
+5. 复核：`git hash-object <path>` 与 `git rev-parse HEAD:<path>` 应一致，`git ls-files -v` 应回到 `S`。
+
+不要把 `--no-skip-worktree` 长期放着：标记的存在有环境原因，取消后 git 每次都会去读被加壳的文件。
+
 ### 普通文件
 
 - `git show`、Python、Node 读写得到明文，正常处理，读写后回读校验。
