@@ -47,3 +47,14 @@ cd codeintel/graphify/<范围> && graphify god-nodes
 ## 使用经验
 
 项目内的使用结论记录在 `docs/code-intelligence-log.md`。
+
+## 常见错误（会留下散落产物）
+
+```text
+错：在源码目录下执行（如 cd frontend/src && graphify extract .）
+    → 生成 frontend/src/graphify-out/，落在源码树里，属散落物
+对：始终在仓库根执行，并显式给 --out codeintel/graphify/<范围>
+
+自检：仓库根的 `git status --porcelain` 不应出现非 codeintel/ 下的 graphify-out；
+     出现即为落点错误，删除该散落目录后按上文重建。
+```
