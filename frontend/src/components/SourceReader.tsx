@@ -336,7 +336,7 @@ export function SourceReader({ source, onClose }: Props) {
 
   const loadedFrom = doc ? doc.offset + 1 : 0;
   const loadedTo = doc ? doc.offset + doc.returned_lines : 0;
-  // 命中信息与跳转同在元信息行右端：命中不止一处时行号由按钮给出，胶囊只报处数；
+  // 命中处数与跳转同在头部右端：命中不止一处时行号由按钮给出，胶囊只报处数；
   // 只有一处时没有按钮，行号就得由胶囊说清。
   const hitChip =
     hits.length === 0
@@ -350,12 +350,34 @@ export function SourceReader({ source, onClose }: Props) {
       <header className="focus-head">
         <div className="focus-head-main">
           <span className="eyebrow">来源</span>
+          {/* 全名进 title：头部只占一行，截断的是字形不是信息。 */}
           <h1 title={doc?.title || source.title}>{doc?.title || source.title}</h1>
         </div>
-        {/* 退出与集中阅读是同一套：右上角一个 ×，Esc 同义。去向唯一，不再放第二个出口。 */}
-        <button type="button" className="focus-close" onClick={onClose} aria-label="退出来源阅读">
-          ×
-        </button>
+        {/* 处数与跳转放在头部，不放卡片元信息行：正文滚到后面时它们仍在视野里，
+            否则「这篇还命中了两处」在读过几屏之后就无从看见了。 */}
+        <div className="focus-head-side">
+          <span className="source-hit-chip">{hitChip}</span>
+          {/* 命中不止一处时才给跳转：一处的情况进来就在那一行上，没有别处可跳。 */}
+          {hits.length > 1 && (
+            <div className="source-hits">
+              {hits.map((hit, index) => (
+                <button
+                  key={`${hit.line}-${index}`}
+                  type="button"
+                  className={`source-hit${index === activeHit ? " is-active" : ""}`}
+                  aria-pressed={index === activeHit}
+                  onClick={() => jumpTo(index)}
+                >
+                  第 {hit.line} 行
+                </button>
+              ))}
+            </div>
+          )}
+          {/* 退出与集中阅读是同一套：右上角一个 ×，Esc 同义。去向唯一，不再放第二个出口。 */}
+          <button type="button" className="focus-close" onClick={onClose} aria-label="退出来源阅读">
+            ×
+          </button>
+        </div>
       </header>
 
       <div className="messages" ref={bodyRef} tabIndex={-1}>
@@ -367,23 +389,6 @@ export function SourceReader({ source, onClose }: Props) {
               </span>
               <span aria-hidden="true">·</span>
               <span className="source-doc-kind">md{doc ? ` · 共 ${doc.total_lines} 行` : ""}</span>
-              <span className="source-hit-chip">{hitChip}</span>
-              {/* 命中不止一处时才给跳转：一处的情况进来就在那一行上，没有别处可跳。 */}
-              {hits.length > 1 && (
-                <div className="source-hits">
-                  {hits.map((hit, index) => (
-                    <button
-                      key={`${hit.line}-${index}`}
-                      type="button"
-                      className={`source-hit${index === activeHit ? " is-active" : ""}`}
-                      aria-pressed={index === activeHit}
-                      onClick={() => jumpTo(index)}
-                    >
-                      第 {hit.line} 行
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
             {loading && !doc && <p className="source-status">正在读取文档…</p>}
             {error && <p className="source-status source-status-error">读取失败：{error}</p>}

@@ -262,25 +262,60 @@ describe("citation source reader", () => {
 
     const view = reader();
     expect(view).not.toBeNull();
-    expect(view?.querySelector("h1")?.textContent).toBe(DOC_TITLE);
+    // 文档名占满头部左侧：省略号只截字形，全名进 title 提示
+    const heading = view?.querySelector<HTMLElement>(".focus-head h1");
+    expect(heading?.textContent).toBe(DOC_TITLE);
+    expect(heading?.getAttribute("title")).toBe(DOC_TITLE);
     expect(view?.querySelector(".source-path")?.textContent).toBe(DOC_PATH);
-    // 头部只剩「来源 + 文档名 + ×」：胶囊不再挂在头部
-    expect(view?.querySelector(".focus-head .source-hit-chip")).toBeNull();
     expect(view?.querySelector<HTMLButtonElement>(".focus-head .focus-close")?.getAttribute("aria-label")).toBe(
       "退出来源阅读",
     );
-    // 命中信息与跳转同在卡片元信息行右端：处数是值，行号按钮是去处
-    expect(view?.querySelector(".source-doc-meta .source-hit-chip")?.textContent).toBe("命中 4 处");
-    const jumpButtons = view?.querySelectorAll<HTMLButtonElement>(".source-doc-meta .source-hit");
+    // 处数与跳转都在头部右端：处数是值，行号按钮是去处
+    expect(view?.querySelector(".focus-head-side .source-hit-chip")?.textContent).toBe("命中 4 处");
+    const jumpButtons = view?.querySelectorAll<HTMLButtonElement>(".focus-head-side .source-hit");
     expect(jumpButtons?.length).toBe(4);
     expect(jumpButtons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
     expect(jumpButtons?.[0].getAttribute("aria-pressed")).toBe("true");
+    // 卡片元信息行只留身份：路径 + 类型与行数，命中信息不再挂在这里
+    expect(view?.querySelector(".source-doc-meta .source-hit-chip")).toBeNull();
+    expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(DOC_PATH);
     expect(view?.querySelector(".source-doc")?.textContent).toContain("环境变量集中读取");
 
     // 命中片段在正文里被标出来，阅读层不是只给一个行号
     const mark = view?.querySelector("mark[data-source-mark]");
     expect(mark?.textContent).toBeTruthy();
     expect(HIT_SNIPPET).toContain(mark?.textContent ?? "");
+  });
+
+  it("keeps the hit count and the jump buttons in the header, outside the scrolling body", async () => {
+    await openReader();
+
+    const view = reader();
+    // 头部不在滚动区里——这就是「滚到下面也找得到」的依据：正文再怎么滚，头部不动
+    const head = view?.querySelector(".focus-head");
+    expect(head).not.toBeNull();
+    expect(head?.closest(".messages")).toBeNull();
+    const side = view?.querySelector(".focus-head-side");
+    expect(side).not.toBeNull();
+    expect(side?.closest(".messages")).toBeNull();
+    expect(side?.querySelector(".source-hit-chip")?.textContent).toBe("命中 4 处");
+
+    // 一处不漏：放不下时由跳转条自己横向滚动，而不是吞掉后面的按钮
+    const buttons = [...(view?.querySelectorAll<HTMLButtonElement>(".source-hits .source-hit") ?? [])];
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      `第 ${FIRST_LINE} 行`,
+      `第 ${SECOND_LINE} 行`,
+      `第 ${THIRD_LINE} 行`,
+      `第 ${FOURTH_LINE} 行`,
+    ]);
+
+    // 头部右端是一组：处数 → 跳转 → ×，× 始终在最右、始终在最后
+    expect(side?.firstElementChild?.classList.contains("source-hit-chip")).toBe(true);
+    expect(side?.lastElementChild?.classList.contains("focus-close")).toBe(true);
+    expect(view?.querySelector(".source-hits")?.nextElementSibling?.classList.contains("focus-close")).toBe(true);
+
+    // 卡片元信息行只剩身份，不再参与命中跳转
+    expect(view?.querySelector(".source-doc-meta .source-hit")).toBeNull();
   });
 
   it("continues reading below the loaded window and keeps the hit marked", async () => {
