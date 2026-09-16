@@ -315,7 +315,7 @@ git checkout -- <path>                      # 用仓库版本覆盖本地
 ## 发布与分发
 
 ```text
-构建发布产物   python scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>
+构建发布产物   python scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>（本项目已装在 .venv，可省略此参数）
                → dist-release/<wheel>（pip/pipx 分发）与 ts-team-kb-<版本>-win-x64.zip（免安装包）
 发布到 Release python scripts/publish-release.py --tag v<版本> --prerelease --apply
                （默认 dry-run；上传后回读资产校验大小与 state）
