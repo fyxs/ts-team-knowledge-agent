@@ -156,7 +156,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 ## 运行方式
 
 - 登录自启：计划任务 `TSKnowledgeAgentWebService` 在用户登录后拉起本地 Web 服务
-  （`run-web-service-hidden.vbs` → `scripts/run-web-service.ps1`，端口已占用时直接跳过，可重复执行）。
+  （`run-web-service-hidden.vbs` → 工作目录下的 `run-api.cmd`，端口已占用时直接跳过，可重复执行）。
 - 定时任务错过后唤醒补跑：`TSKnowledgeAgentScheduler` 与 `TSKnowledgeAgentInspection` 均启用
   `StartWhenAvailable`，并各自按 `--if-due` 判断是否真正执行。
 
