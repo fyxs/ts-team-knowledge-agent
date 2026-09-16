@@ -111,3 +111,16 @@ AnswerArticle 的宿主 MessageList、FocusView（新增 onOpenSource，不传�
 
 1. **Graphify 只吃代码文件**：`styles.css` 报 `not classified (no supported extension)`，`tokens.css` 被 `skipped as potentially sensitive` 抑制 —— 该范围图谱只覆盖 ts/tsx，**样式改动不进图**，不能用节点/边数衡量 UI 改动规模。
 2. **边数不可跨缓存状态对照**：无改动时连续两次 `extract` 给出同一组数字（128 / 244，可作基线）；但增量缓存下重新抽取的读数与上一次运行（记录为 124 / 265）并不相同 —— 命令一致、缓存状态不一致，**对照前先确认缓存状态，别把差值当成改动量**。
+
+## 2026-09-16 | 来源阅读：命中行快捷跳转的长文与联动修复（Graphify 复核，Graphify 0.9.49）
+
+改动范围：`frontend/src/components/SourceReader.tsx`、`frontend/src/source-reader.test.tsx`。
+
+| 工具 | 范围 | 结果 | 命令 |
+| --- | --- | --- | --- |
+| Graphify | frontend/src | 142 节点 / 275 边 / 9 社区（22 文件：2 个改动文件重抽，20 个命中增量缓存） | `graphify extract frontend/src --out codeintel/graphify/frontend-src --code-only` |
+
+本次复核新增的坑：
+
+1. **测试文件也在图谱范围内**：`source-reader.test.tsx` 的改动同样改变节点/边，读数不是「只算产品代码」的规模；对照读数前先确认两次运行覆盖的是同一套文件。
+2. **文件名会成为图上节点名**：`markNeedle()` 因为被测试直接引用而升到 8 边、进了 god nodes —— 导出给测试用的纯函数在图上是可见依赖，不要当成「没人用」删掉。
