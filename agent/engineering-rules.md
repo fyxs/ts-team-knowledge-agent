@@ -109,3 +109,21 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
   只看「构建成功」不算通过。
 - **构建脚本要能一键复现**：`scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>`
   产出 wheel 与免安装 zip；发布用 `scripts/publish-release.py`（默认 dry-run，上传后回读校验）。
+
+## 工具产物目录约定
+
+代码智能等开发工具会在仓库内产生索引与图谱。产物**必须放在仓库根目录下的固定位置**，
+便于人工一眼分辨与审查，不得散落到临时目录或用户目录：
+
+```text
+graphify-out/<范围>/      Graphify 图谱（graph.json 及其中间文件），按扫描范围分子目录
+.serena/                  Serena 项目配置与符号缓存（工具自带 .gitignore，本仓库 .gitignore 亦覆盖）
+.codegraph/               CodeGraph 索引（当前版本固定写用户级 ~\.codegraph\，项目内暂不产生）
+```
+
+规则：
+
+- 以上目录全部写入 `.gitignore`，不得提交；仓库只提交配置、脚本与文档。
+- 扫描或索引时必须排除这些目录，避免把工具产物当源码重复吃进去。
+- 产物可随时删除重建，删除不影响仓库内容。
+- 新引入工具时，先确定并登记产物落点，再运行。

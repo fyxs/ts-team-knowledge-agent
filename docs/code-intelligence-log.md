@@ -16,7 +16,8 @@
 工具版本：Graphify 0.9.49 · CodeGraph 0.20.1 · Serena 1.7.1.dev0
 扫描范围：`backend/ts_knowledge_agent`（47 个 py / 217 KB）· `frontend/src`（19 个 ts|tsx / 91 KB）
 排除项：`__pycache__` · `.venv` · `node_modules` · `dist` · `graphify-out`
-产物位置：`C:\tmp\trial-codeintel\`（Graphify 图谱）· `backend/.serena/`（Serena 缓存，已 gitignore）
+产物位置：`graphify-out/backend/`、`graphify-out/frontend-src/`（Graphify 图谱）· `backend/.serena/`（Serena 缓存）
+（三者均已被 .gitignore 忽略；CodeGraph 索引固定写用户级 `~\.codegraph\`，不在仓库内）
 仓库对照：试用前后 `git status` 均为 clean（未改动任何业务文件）
 
 ### 结果
