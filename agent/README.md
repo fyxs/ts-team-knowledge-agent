@@ -19,6 +19,7 @@ docs/project-structure.md      工程结构规范
 docs/frontend-stack.md         前端技术栈定稿（做前端必读）
 docs/local-install-and-serve.md 本地安装与启动
 docs/logging-v1.md             日志与运行记录
+docs/code-intelligence-log.md  代码智能工具使用记录
 docs/roadmap.md                阶段进展与后续计划
 ```
 

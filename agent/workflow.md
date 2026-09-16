@@ -162,8 +162,10 @@ Serena     符号级定位与引用 serena.exe（按项目语言显式启用语�
 - 工具是用户级安装，不进本项目依赖、不改 package.json、不把工具源码放进仓库
 - 只扫 src 与 backend，不扫 node_modules / dist / 构建产物（否则图谱被 bundle 噪声污染）
 - .serena/ 与 graphify-out/ 不入库；已加入 .gitignore
-- 经验沉淀：每次使用后把可复用结论追加到共享技能 code-intelligence-tooling 的
-  references/experience-log.md（写结论与判据，不写"试过了"）
+- 使用记录：本项目内的使用结论（扫描范围、文件/节点/边规模、可用性、踩坑）写入
+  `docs/code-intelligence-log.md`，供后续改动参考；写结论与判据，不写"试过了"
+- 本文件与 `docs/` 是本仓库对所有 Agent 的规则来源。Hermes 侧另有跨项目经验沉淀机制，
+  属于 Hermes 自身能力，其他 Agent 无需也无法访问，因此项目文档不引用其路径
 - 工具输出只是证据输入，不能替代用户批准的范围边界或验收标准
 ```
 ## 治理数据回补与跨目录比对
