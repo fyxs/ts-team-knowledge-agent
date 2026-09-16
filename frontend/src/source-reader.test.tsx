@@ -234,6 +234,12 @@ async function openReader() {
   await flush();
 }
 
+/** 行号按钮上的「当前落点」标记：用户点过的那一处才带 is-active。 */
+const markedHits = () =>
+  [...(reader()?.querySelectorAll<HTMLButtonElement>(".source-hit.is-active") ?? [])].map(
+    (button) => button.textContent,
+  );
+
 async function clickHit(index: number) {
   await act(async () => {
     reader()?.querySelectorAll<HTMLButtonElement>(".source-hit")[index].click();
@@ -275,7 +281,11 @@ describe("citation source reader", () => {
     const jumpButtons = view?.querySelectorAll<HTMLButtonElement>(".focus-head-side .source-hit");
     expect(jumpButtons?.length).toBe(4);
     expect(jumpButtons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
-    expect(jumpButtons?.[0].getAttribute("aria-pressed")).toBe("true");
+    // 进来是自动落在第 1 处，那是落点不是选择：按钮一处都不预选。
+    expect([...(jumpButtons ?? [])].every((button) => button.getAttribute("aria-current") === "false")).toBe(
+      true,
+    );
+    expect(view?.querySelectorAll(".source-hit.is-active").length).toBe(0);
     // 卡片元信息行只留身份：路径 + 类型与行数，命中信息不再挂在这里
     expect(view?.querySelector(".source-doc-meta .source-hit-chip")).toBeNull();
     expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(DOC_PATH);
@@ -356,7 +366,7 @@ describe("citation source reader", () => {
     const mark = reader()?.querySelector("mark[data-source-mark]");
     expect(mark?.textContent).toBeTruthy();
     expect(isMarkOf(mark as HTMLElement, THIRD_HIT_SNIPPET)).toBe(true);
-    expect(reader()?.querySelectorAll(".source-hit")[2].getAttribute("aria-pressed")).toBe("true");
+    expect(markedHits()).toEqual([`第 ${THIRD_LINE} 行`]);
     // 读数跟着新窗口走：跳到第 453 行往后，不是「已经读到过前面」
     expect(reader()?.querySelector(".source-progress-end")?.textContent).toContain(`共 ${TOTAL_LINES} 行`);
   });
@@ -376,7 +386,7 @@ describe("citation source reader", () => {
 
     expect(docRequests.length).toBe(2);
     expect(scroll.value).toBe(5000 - 24);
-    expect(reader()?.querySelectorAll(".source-hit")[2].getAttribute("aria-pressed")).toBe("true");
+    expect(markedHits()).toEqual([`第 ${THIRD_LINE} 行`]);
   });
 
   it("keeps the hit you clicked last when two reads are in flight", async () => {
@@ -396,7 +406,7 @@ describe("citation source reader", () => {
     const body = reader()?.querySelector(".source-doc")?.textContent ?? "";
     expect(body).toContain(FOURTH_HIT_SNIPPET);
     expect(body).not.toContain(THIRD_HIT_SNIPPET);
-    expect(reader()?.querySelectorAll(".source-hit")[3].getAttribute("aria-pressed")).toBe("true");
+    expect(markedHits()).toEqual([`第 ${FOURTH_LINE} 行`]);
   });
 
   it("closes the reader with Escape and leaves the focus view open", async () => {
@@ -457,7 +467,7 @@ describe("citation source reader", () => {
 
     // 命中处对到滚动区顶部留白处：6000 − 24。上一版把它钳在卡片顶端，点了几近等于没反应。
     expect(scroll.value).toBe(6000 - 24);
-    expect(reader()?.querySelectorAll(".source-hit")[1].getAttribute("aria-pressed")).toBe("true");
+    expect(markedHits()).toEqual([`第 ${SECOND_LINE} 行`]);
   });
 
   it("keeps the landing math honest", () => {

@@ -203,6 +203,12 @@ type Props = {
 export function SourceReader({ source, onClose }: Props) {
   const [doc, setDoc] = useState<KnowledgeDocument | null>(null);
   const [activeHit, setActiveHit] = useState(0);
+  /**
+   * 「当前在哪一处」只在用户点过行号之后才标到按钮上。
+   * 进阅读层是自动落在第 1 处命中上的 —— 那是落点，不是用户选的；一进来就把「第 42 行」
+   * 画成按下态，会被读成被选中。命中行本身在正文里照样标出来，位置信息一点没少。
+   */
+  const [hitPicked, setHitPicked] = useState(false);
   const [jump, setJump] = useState<{ token: number; align: JumpAlign }>({ token: 0, align: "window" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -298,6 +304,8 @@ export function SourceReader({ source, onClose }: Props) {
   const jumpTo = (index: number) => {
     const hit = hits[index];
     if (!hit) return;
+    // 点了哪一处，哪一处才标成「当前落点」：按钮标的是用户的去处，不是自动落点。
+    setHitPicked(true);
     const loadedFrom = doc ? doc.offset + 1 : 0;
     const loadedTo = doc ? doc.offset + doc.returned_lines : 0;
     if (!doc || hit.line < loadedFrom || hit.line > loadedTo) {
@@ -361,11 +369,14 @@ export function SourceReader({ source, onClose }: Props) {
           {hits.length > 1 && (
             <div className="source-hits">
               {hits.map((hit, index) => (
+                // 进阅读层不预选任何一处：is-active 只跟用户点过的那一处走。
+                // 语义上用 aria-current（当前在这一处）而不是 aria-pressed —— 这是「去哪儿」的命令，
+                // 不是开关，报成被按下就是同一个误解的听觉版本。
                 <button
                   key={`${hit.line}-${index}`}
                   type="button"
-                  className={`source-hit${index === activeHit ? " is-active" : ""}`}
-                  aria-pressed={index === activeHit}
+                  className={`source-hit${hitPicked && index === activeHit ? " is-active" : ""}`}
+                  aria-current={hitPicked && index === activeHit}
                   onClick={() => jumpTo(index)}
                 >
                   第 {hit.line} 行
