@@ -2,18 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "./App";
+import { landingScrollTop } from "./components/SourceReader";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const DOC_PATH = "members/whm/研发指南/前端架构/前端编码规范.md";
 const DOC_TITLE = "前端编码规范";
 const FIRST_LINE = 42;
+/** 同一篇文档里的第二处命中：用来验证窗口内的跳转真的会滚动，而不是停在原处。 */
+const SECOND_LINE = 120;
 /** 阅读层要从命中行上方 15 行开始取，而不是从文档开头开始。 */
 const FIRST_OFFSET = FIRST_LINE - 1 - 15;
 const WINDOW_LINES = 300;
 const SECOND_OFFSET = FIRST_OFFSET + WINDOW_LINES;
 const TOTAL_LINES = 512;
 const HIT_SNIPPET = "环境变量集中读取，禁止在业务代码里直接读 process.env。";
+const SECOND_HIT_SNIPPET = "只有 VITE_ 前缀的变量才会被注入前端。";
 
 const SESSION = { id: "s-env", title: "环境变量怎么读取？", updatedAt: Date.now() };
 
@@ -21,7 +25,7 @@ const STREAM = [
   'data: {"type":"start","question":"环境变量怎么读取？"}\n\n',
   'data: {"type":"tool_call","name":"knowledge_search","arguments":{"query":"环境变量"},"step":1}\n\n',
   `data: {"type":"answer","content":"## 结论\\n\\n环境变量集中读取。","citations":["${DOC_PATH}"],` +
-    `"sources":[{"path":"${DOC_PATH}","title":"${DOC_TITLE}","hits":[{"line":${FIRST_LINE},"snippet":"${HIT_SNIPPET}"}]}],` +
+    `"sources":[{"path":"${DOC_PATH}","title":"${DOC_TITLE}","hits":[{"line":${FIRST_LINE},"snippet":"${HIT_SNIPPET}"},{"line":${SECOND_LINE},"snippet":"${SECOND_HIT_SNIPPET}"}]}],` +
     `"steps":1,"retrieved":true}\n\n`,
 ];
 
@@ -142,7 +146,7 @@ describe("citation source reader", () => {
 
     const text = container?.querySelector(".citation")?.textContent ?? "";
     expect(text).toContain(DOC_TITLE);
-    expect(text).toContain(`命中 1 处 · 第 ${FIRST_LINE} 行`);
+    expect(text).toContain(`命中 2 处 · 第 ${FIRST_LINE} 行`);
     // 完整路径不进列表行：它只出现在 title 提示与阅读层头部
     const row = container?.querySelector<HTMLButtonElement>(".citation-row");
     expect(row?.getAttribute("title")).toBe(DOC_PATH);
@@ -164,9 +168,17 @@ describe("citation source reader", () => {
     expect(view).not.toBeNull();
     expect(view?.querySelector("h1")?.textContent).toBe(DOC_TITLE);
     expect(view?.querySelector(".source-path")?.textContent).toBe(DOC_PATH);
-    expect(view?.querySelector(".source-hit-chip")?.textContent).toBe(`命中 1 处 · 第 ${FIRST_LINE} 行`);
-    // 只有一处命中时不给跳转：头部胶囊已经说明了位置，一个按钮无处可跳。
-    expect(view?.querySelector(".source-hit")).toBeNull();
+    // 头部只剩「来源 + 文档名 + ×」：胶囊不再挂在头部
+    expect(view?.querySelector(".focus-head .source-hit-chip")).toBeNull();
+    expect(view?.querySelector<HTMLButtonElement>(".focus-head .focus-close")?.getAttribute("aria-label")).toBe(
+      "退出来源阅读",
+    );
+    // 命中信息与跳转同在卡片元信息行右端：处数是值，行号按钮是去处
+    expect(view?.querySelector(".source-doc-meta .source-hit-chip")?.textContent).toBe("命中 2 处");
+    const jumpButtons = view?.querySelectorAll<HTMLButtonElement>(".source-doc-meta .source-hit");
+    expect(jumpButtons?.length).toBe(2);
+    expect(jumpButtons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
+    expect(jumpButtons?.[0].getAttribute("aria-pressed")).toBe("true");
     expect(view?.querySelector(".source-doc")?.textContent).toContain("环境变量集中读取");
 
     // 命中片段在正文里被标出来，阅读层不是只给一个行号
@@ -221,6 +233,80 @@ describe("citation source reader", () => {
     await pressEscape();
     await flush();
     expect(container?.querySelector(".focus-view")).toBeNull();
+  });
+
+  it("exits from the same × as the answer reader, with no second back button", async () => {
+    await ask();
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>(".message-open")?.click();
+    });
+    await flush();
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>(".focus-view .citation-row")?.click();
+    });
+    await flush();
+
+    const view = reader();
+    expect(view).not.toBeNull();
+    expect(view?.querySelector(".source-back")).toBeNull();
+
+    await act(async () => {
+      view?.querySelector<HTMLButtonElement>(".focus-close")?.click();
+    });
+    await flush();
+    // 退出后回到集中阅读，而不是一路退到会话列表
+    expect(reader()).toBeNull();
+    expect(container?.querySelector(".focus-view")).not.toBeNull();
+  });
+
+  it("scrolls to a hit inside the loaded window instead of staying put", async () => {
+    await ask();
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>(".citation-row")?.click();
+    });
+    await flush();
+
+    // jsdom 不做排版，落点只能喂桩：滚动区高 800，命中处在内容坐标 6000。
+    const messages = reader()?.querySelector<HTMLElement>(".messages");
+    let scrollTop = 0;
+    const rect = (top: number) =>
+      ({ top, bottom: top + 22, left: 0, right: 0, width: 0, height: 22, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.classList.contains("messages")) return rect(0);
+      return rect(this.matches("mark[data-source-mark]") ? 6000 : 40);
+    });
+    Object.defineProperty(messages, "clientHeight", {
+      configurable: true,
+      get() {
+        return 800;
+      },
+    });
+    Object.defineProperty(messages, "scrollTop", {
+      configurable: true,
+      get() {
+        return scrollTop;
+      },
+      set(value: number) {
+        scrollTop = value;
+      },
+    });
+
+    await act(async () => {
+      reader()?.querySelectorAll<HTMLButtonElement>(".source-hit")[1].click();
+    });
+    await flush();
+
+    // 命中处对到滚动区顶部留白处：6000 − 24。上一版把它钳在卡片顶端，点了几近等于没反应。
+    expect(scrollTop).toBe(6000 - 24);
+    expect(reader()?.querySelectorAll(".source-hit")[1].getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("keeps the landing math honest", () => {
+    // 命中处对到顶部留白处
+    expect(landingScrollTop(6000)).toBe(5976);
+    // 靠近文档开头：不越过内容顶端
+    expect(landingScrollTop(10)).toBe(0);
+    expect(landingScrollTop(24)).toBe(0);
   });
 
   it("reports a read failure instead of showing an empty document", async () => {

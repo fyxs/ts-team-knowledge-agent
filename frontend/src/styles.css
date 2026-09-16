@@ -445,25 +445,21 @@ button.citation-row:hover .citation-arrow{color:var(--fg)}
 .markdown-body .image-external:hover{background:var(--accent-hover)}
 
 /* ---------- 来源阅读视图 ────────────────────────────────────────────
-   点引用行进来，落在这一条命中的那一段。整屏铺满，但顶部压一条阅读栏把
-   「这是哪篇、命中的哪几处、怎么回去」固定在视野里。
-   这一层整屏铺满，但结构就是 .focus-view 的复用：同一套头部、滚动区（.messages）、
-   卡片（.message）与正文排版（.markdown-body），只换尾部那两件事——
-   退出方式（唯一的「返回答案」，Esc 同义）与命中信息（头部右侧一个胶囊）。
-   Esc 在捕获阶段拦下，所以它与集中阅读各退一层，不会一次退两层。 */
+   点引用行进来，落在这一条命中的那一段。整屏铺满，结构就是 .focus-view 的复用：
+   同一套头部（来源 / 文档名 / 右上角 ×）、滚动区（.messages）、卡片（.message）
+   与正文排版（.markdown-body）。退出方式与集中阅读完全一致——右上角那个 ×，Esc 同义，
+   交互上不再有两套「返回」；它与集中阅读各退一层，不会一次退到底。
+   命中信息与跳转都在卡片元信息行右端（.source-hit-chip / .source-hits）：
+   处数是值，行号按钮是去处，不必在两处之间对照。 */
 .focus-view.source-view{z-index:90}
-/* 返回按钮：有边框的按钮而不是文字链——它是这一层唯一的出路，该有按钮的重量感 */
-.source-back{flex:none;display:inline-flex;align-items:center;gap:var(--space-1);height:28px;padding:0 var(--space-3);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg-2);font:inherit;font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
-.source-back:hover{background:var(--accent-hover);color:var(--fg);border-color:var(--border-soft)}
-.source-back:focus-visible{outline:none;box-shadow:var(--focus-ring)}
-/* 头部右侧的命中胶囊：与卡片元信息同为等宽小字，只是位置在头部、不换行 */
-.source-hit-chip{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);white-space:nowrap}
 /* 卡片元信息行：完整路径只在这里铺开——省略掉的那一段正是判断依据 */
 .source-doc-meta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);padding-bottom:var(--space-3);margin-bottom:var(--space-4);border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
 .source-path{margin:0;word-break:break-all}
 .source-doc-kind{flex:none;white-space:nowrap}
-/* 命中跳转：与元信息同一行、贴右缘。命中可能落在已读窗口之外，所以它能重新取一段。 */
-.source-hits{flex:none;margin-left:auto;display:flex;align-items:center;gap:var(--space-1)}
+/* 命中胶囊：与元信息同为等宽小字。它负责顶到右缘，行号按钮紧跟在它右边连成一组。 */
+.source-hit-chip{flex:none;margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);white-space:nowrap}
+/* 命中跳转：与元信息同一行。命中可能落在已读窗口之外，所以它能重新取一段。 */
+.source-hits{flex:none;display:flex;align-items:center;gap:var(--space-1)}
 .source-hit{height:22px;padding:0 var(--space-2);border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--meta);font:inherit;font-family:var(--font-mono);font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .source-hit:hover{background:var(--accent-hover);color:var(--fg)}
 /* 当前命中：底色再深一档，文字同步提到 --fg —— 深底浅字，对比度是升的 */

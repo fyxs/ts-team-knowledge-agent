@@ -98,3 +98,16 @@ AnswerArticle 的宿主 MessageList、FocusView（新增 onOpenSource，不传�
 | 依据 | `graphify --help`：`extract --out DIR` 固定写 `<DIR>/graphify-out/`（无关闭选项）；`god-nodes` / `query` / `explain` / `affected` / `path` 默认取 `graphify-out/graph.json`；`uninstall --purge` 只删这一层 |
 | 核验 | 在 `<范围>` 目录下直接跑 `graphify god-nodes` 命中内层图：backend → Settings 89 / main() 59 / SessionStore 33；frontend-src → SettingsPanel() 9 / AnswerSource 8 / SourceReader() 6（含本轮新增组件） |
 | 结论 | 命令跑完即完整，`graph.json` / `manifest.json` / `cache/` 天然同版本；读取命令无需 `--graph` |
+
+## 2026-09-16 | 来源阅读交互统一与命中跳转修复（Graphify 复核，Graphify 0.9.49）
+
+改动范围：`frontend/src/components/SourceReader.tsx`、`frontend/src/source-reader.test.tsx`、`frontend/src/styles.css`。
+
+| 工具 | 范围 | 结果 | 命令 |
+| --- | --- | --- | --- |
+| Graphify | frontend/src | 128 节点 / 244 边 / 9 社区（22 文件，第二次运行全部命中增量缓存） | `graphify extract frontend/src --out codeintel/graphify/frontend-src --code-only` |
+
+本次复核新增的坑：
+
+1. **Graphify 只吃代码文件**：`styles.css` 报 `not classified (no supported extension)`，`tokens.css` 被 `skipped as potentially sensitive` 抑制 —— 该范围图谱只覆盖 ts/tsx，**样式改动不进图**，不能用节点/边数衡量 UI 改动规模。
+2. **边数不可跨缓存状态对照**：无改动时连续两次 `extract` 给出同一组数字（128 / 244，可作基线）；但增量缓存下重新抽取的读数与上一次运行（记录为 124 / 265）并不相同 —— 命令一致、缓存状态不一致，**对照前先确认缓存状态，别把差值当成改动量**。

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fetchKnowledgeDocument, type AnswerSource, type KnowledgeDocument } from "../api/agent";
 import { MarkdownView } from "./MarkdownView";
 
@@ -6,6 +6,19 @@ import { MarkdownView } from "./MarkdownView";
 const WINDOW_LINES = 300;
 /** 命中行上方预留的行数：落地时命中处不该贴着顶边。 */
 const PRE_ROLL_LINES = 15;
+/** 落点留白：命中处对到滚动区顶部时留这么高，文字才不贴边。 */
+const LANDING_AIR = 24;
+
+/** 跳转信号要的落点方式：新取的一段窗口 / 窗口内的某一处命中。 */
+type JumpAlign = "window" | "hit";
+
+/**
+ * 「层」的落点：把命中处对到滚动区顶部下方留白处，不越过内容顶端。
+ * 点命中按钮时用它——位移本身就是反馈，命中已在视野里也照样对齐。
+ */
+export function landingScrollTop(markTop: number): number {
+  return Math.max(0, markTop - LANDING_AIR);
+}
 
 /** 从命中片段里挑定位锚点：优先长片段，最多取三个候选依次尝试。 */
 export function highlightCandidates(snippet: string): string[] {
@@ -59,15 +72,17 @@ type Props = {
 /**
  * 来源阅读：整屏放被引用的那篇文档，落在命中行并高亮。
  *
- * 结构照设计稿的集中阅读复用：.focus-view 外壳 + 单行头部（返回 / 来源 / 文档名，
- * 右侧一个命中胶囊）+ .messages 滚动区 + .source-doc 卡片（元信息行 + 正文）。
- * 只做三件事 —— 取正文、标命中、读得下去。入口只有一个「返回答案」；
- * 与集中阅读各退一层，靠 App 显式让路而不是事件阶段（见 FocusView 的 escDisabled）。
+ * 结构照设计稿的集中阅读复用：.focus-view 外壳 + 单行头部（来源 / 文档名 / 右上角 ×）+
+ * .messages 滚动区 + .source-doc 卡片（元信息行 + 正文）。头部与集中阅读完全同一套 ——
+ * 退出都是右上角那个 ×，Esc 同义；它与集中阅读各退一层，靠 App 显式让路而不是事件阶段
+ * （见 FocusView 的 escDisabled）。
+ *
+ * 命中信息与跳转同在卡片元信息行右端：处数是值，行号按钮是去处，不必在两处之间对照。
  */
 export function SourceReader({ source, onClose }: Props) {
   const [doc, setDoc] = useState<KnowledgeDocument | null>(null);
   const [activeHit, setActiveHit] = useState(0);
-  const [jumpToken, setJumpToken] = useState(0);
+  const [jump, setJump] = useState<{ token: number; align: JumpAlign }>({ token: 0, align: "window" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -82,7 +97,9 @@ export function SourceReader({ source, onClose }: Props) {
       setActiveHit(hitIndex);
       try {
         setDoc(await fetchKnowledgeDocument(source.path, offset, WINDOW_LINES));
-        setJumpToken((token) => token + 1);
+        // 新取的一段窗口从头看：窗口本身就从命中行上方 15 行开始，
+        // 顶部同时给出「这是哪篇文档」和「命中的那一段」。
+        setJump((previous) => ({ token: previous.token + 1, align: "window" }));
       } catch (failure) {
         setError(failure instanceof Error ? failure.message : String(failure));
         setDoc(null);
@@ -121,10 +138,16 @@ export function SourceReader({ source, onClose }: Props) {
     }
   }, [doc, activeHit, hits]);
 
-  // 滚动只跟着「主动跳转」走：依赖里刻意不放 doc —— 追加读取时不该把读者拽回命中行。
-  useEffect(() => {
+  // 滚动只跟着跳转信号走：loadMore 不动 jump，追加读取就不会把读者拽回命中行。
+  // 用 useLayoutEffect 而不是 useEffect：正文换掉后浏览器还停在旧 scrollTop 上，
+  // 等绘制之后再纠正会先闪一帧错位的内容。
+  useLayoutEffect(() => {
     const container = bodyRef.current;
-    if (!container || !doc) return;
+    if (!container) return;
+    if (jump.align === "window") {
+      container.scrollTop = 0;
+      return;
+    }
     const mark = container.querySelector<HTMLElement>("mark[data-source-mark]");
     const card = container.querySelector<HTMLElement>(".source-doc");
     const target = mark ?? card;
@@ -132,14 +155,10 @@ export function SourceReader({ source, onClose }: Props) {
     // 用滚动容器自身的视口换算落点：offsetTop 的参照是最近的定位祖先（这里是
     // position:fixed 的 .source-view），直接拿它当 scrollTop 会多滚一个头部的高度，
     // 结果命中处被推到可视区上沿之外——「落在那一段」就落空了。
-    const offsetInContent = (element: HTMLElement) =>
-      element.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-    // 卡片自己的元信息行（完整路径、命中跳转）也在内容里：命中靠近文档开头时不能把它顶出去，
-    // 否则「落在哪一段」看得到，「看的是哪篇、还能跳到哪几处」反而滚没了。
-    const ceiling = card instanceof HTMLElement ? offsetInContent(card) : 0;
-    const desired = offsetInContent(target) - 24;
-    container.scrollTop = Math.max(0, Math.min(desired, Math.max(ceiling, 0)));
-  }, [jumpToken]);
+    const markTop =
+      target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    container.scrollTop = landingScrollTop(markTop);
+  }, [jump]);
 
   const jumpTo = (index: number) => {
     const hit = hits[index];
@@ -151,7 +170,9 @@ export function SourceReader({ source, onClose }: Props) {
       return;
     }
     setActiveHit(index);
-    setJumpToken((token) => token + 1);
+    // 窗口内的命中：把命中处对到顶部留白处。即使它已在视野里也照样对齐——按了要有位移，
+    // 落点固定在同一高度，读者一眼就知道跳到哪了。
+    setJump((previous) => ({ token: previous.token + 1, align: "hit" }));
   };
 
   const loadMore = async () => {
@@ -175,35 +196,26 @@ export function SourceReader({ source, onClose }: Props) {
 
   const loadedFrom = doc ? doc.offset + 1 : 0;
   const loadedTo = doc ? doc.offset + doc.returned_lines : 0;
-  // 头部胶囊只说「命中了什么、第一处在哪」：命中数写在行上，位置可核对。
-  const hitChip = hits.length === 0 ? "已引用" : `命中 ${hits.length} 处 · 第 ${hits[0].line} 行`;
+  // 命中信息与跳转同在元信息行右端：命中不止一处时行号由按钮给出，胶囊只报处数；
+  // 只有一处时没有按钮，行号就得由胶囊说清。
+  const hitChip =
+    hits.length === 0
+      ? "已引用"
+      : hits.length === 1
+        ? `命中 1 处 · 第 ${hits[0].line} 行`
+        : `命中 ${hits.length} 处`;
 
   return (
     <div className="focus-view source-view" role="dialog" aria-modal="true" aria-label="来源文档">
       <header className="focus-head">
         <div className="focus-head-main">
-          <button type="button" className="source-back" onClick={onClose}>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M14.5 6 8.5 12l6 6" />
-            </svg>
-            返回答案
-          </button>
           <span className="eyebrow">来源</span>
           <h1 title={doc?.title || source.title}>{doc?.title || source.title}</h1>
         </div>
-        <div className="focus-head-side">
-          <span className="source-hit-chip">{hitChip}</span>
-        </div>
+        {/* 退出与集中阅读是同一套：右上角一个 ×，Esc 同义。去向唯一，不再放第二个出口。 */}
+        <button type="button" className="focus-close" onClick={onClose} aria-label="退出来源阅读">
+          ×
+        </button>
       </header>
 
       <div className="messages" ref={bodyRef} tabIndex={-1}>
@@ -215,7 +227,8 @@ export function SourceReader({ source, onClose }: Props) {
               </span>
               <span aria-hidden="true">·</span>
               <span className="source-doc-kind">md{doc ? ` · 共 ${doc.total_lines} 行` : ""}</span>
-              {/* 命中不止一处时才给跳转：一处的情况「返回答案」已经把人放在那里了。 */}
+              <span className="source-hit-chip">{hitChip}</span>
+              {/* 命中不止一处时才给跳转：一处的情况进来就在那一行上，没有别处可跳。 */}
               {hits.length > 1 && (
                 <div className="source-hits">
                   {hits.map((hit, index) => (
