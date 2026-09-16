@@ -71,13 +71,36 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 
 ## 环境注意事项（本机 DLP）
 
-本机装有 E-SafeNet 透明加解密：
+本机装有 E-SafeNet 透明加解密。**同一个仓库里存在两类文件**，处置方式不同。
 
-- `git`、`python`、`node` 读写得到明文；PowerShell 的 .NET 文件 API 可能读到密文。
-- 用 PowerShell 读字节会把正常文件误判为「损坏」；用 PowerShell 写文件可能被回滚。
-- 需要读取或修改仓库内文本文件时，用 `git show` 或 Python/Node 读写，并回读校验内容。
-- 若某文件被 DLP 独占锁定（读 "Permission denied"、`git` 报 `unable to unlink`），
-  先确认是否被编辑器打开；不要强行删除或覆盖。
+### 加密外壳文件
+
+判定特征（命中其一即按此类处理）：
+
+- 原始字节头为 `62 14 23 65`（`b\x14#e`，E-SafeNet 外壳），文件内含 `E-SafeNet` / `LOCK` 标记；
+- Python 读取报 `PermissionError [Errno 13]`，Node 报 `EPERM`（不是 ACL 问题：可访问文件的 ACL 与它完全一致）；
+- 该文件往往同时带 git `skip-worktree` / `assume-unchanged` 标记（`git ls-files -v <path>` 首字母小写）。
+
+处置规则（硬规则）：
+
+1. **Agent 侧只读**：不要用 PowerShell、Node 或任何其它进程变通写入。
+   PowerShell 的 .NET 文件 API 读到的是**密文**，按文本解码后回写，等于用乱码覆盖原文。
+2. 需要内容时用 `git show HEAD:<path>`（走对象库，拿到的是明文）；不要读工作区文件指望拿到明文。
+3. **严禁"读到什么就回写什么"**。写入前必须能证明读到的是明文（例如能解析出预期标题/结构）；
+   写入后除哈希比对外还必须校验明文特征。只比对哈希会得出「一致」的错误结论——
+   两边可能是同一份密文。
+4. 判断是否被改动，用对象比对而不是 `git status`：
+   `git hash-object <path>` 与 `git rev-parse HEAD:<path>` 不一致，即工作区文件已被改动。
+   （skip-worktree 文件在 `git status` 里永远是干净的，改动不会显示。）
+5. 需要修改这类文件时，交给**交互式白名单工具**（编辑器、资源管理器），或由用户在本地执行。
+6. 若已误写：仓库版本完好，用 `git show HEAD:<path>` 取出原文，交用户用编辑器覆盖保存。
+
+### 普通文件
+
+- `git show`、Python、Node 读写得到明文，正常处理，读写后回读校验。
+- 不要用 PowerShell 文本管道往返读写（会把中文与编码搞坏）。
+- 编写 PowerShell 脚本只用 ASCII：中文注释会让 5.1 按 ANSI 解析，行为异常。
+- 若文件被独占锁定（`git` 报 `unable to unlink`），先确认是否被编辑器打开，不要强行删除或覆盖。
 
 ## 验证与提交
 
