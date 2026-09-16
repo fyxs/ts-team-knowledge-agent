@@ -16,7 +16,7 @@
 工具版本：Graphify 0.9.49 · CodeGraph 0.20.1 · Serena 1.7.1.dev0
 扫描范围：`backend/ts_knowledge_agent`（47 个 py / 217 KB）· `frontend/src`（19 个 ts|tsx / 91 KB）
 排除项：`__pycache__` · `.venv` · `node_modules` · `dist` · `graphify-out`
-产物位置：`graphify-out/backend/`、`graphify-out/frontend-src/`（Graphify 图谱）· `backend/.serena/`（Serena 缓存）
+产物位置：`graphify-out/backend/`、`graphify-out/frontend-src/`（Graphify 图谱）· `.serena/`（Serena 配置与符号缓存，位于仓库根）
 （三者均已被 .gitignore 忽略；CodeGraph 索引固定写用户级 `~\.codegraph\`，不在仓库内）
 仓库对照：试用前后 `git status` 均为 clean（未改动任何业务文件）
 
@@ -27,7 +27,7 @@
 | Graphify | backend | 5.2 s | 496 节点 / 1344 边（纯 AST，`--code-only`） |
 | Graphify | frontend/src | 1.5 s | 94 节点 / 193 边 |
 | CodeGraph | backend | 23.5 s | 47 文件解析（47 成功 / 0 跳过）· 580 节点 · 1133 边 · 16 条路由 |
-| Serena | backend | 25.0 s | python 语言服务器，索引 47 个文件 |
+| Serena | 仓库根 | 15.6 s | python + typescript 语言服务器，索引 python=110 / typescript=21 个文件 |
 
 ### 有价值的输出示例
 
