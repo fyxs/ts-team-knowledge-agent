@@ -112,19 +112,24 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 
 ## 工具产物目录约定
 
-代码智能等开发工具会在仓库内产生索引与图谱。产物**必须放在仓库根目录下的固定位置**，
-便于人工一眼分辨与审查，不得散落到临时目录或用户目录：
+代码智能等开发工具会在仓库内产生索引与图谱。产物**统一收在一个目录下**，便于人工一眼分辨与审查：
 
 ```text
-graphify-out/<范围>/      Graphify 图谱（graph.json 及其中间文件），按扫描范围分子目录
-.serena/                  Serena 项目配置与符号缓存（工具自带 .gitignore，本仓库 .gitignore 亦覆盖）
-.codegraph/               CodeGraph 索引（当前版本固定写用户级 ~\.codegraph\，项目内暂不产生）
+codeintel/graphify/<范围>/graph.json   Graphify 图谱
+codeintel/serena/                      Serena 项目配置与符号缓存
+codeintel/README.md                    落点说明与重建方式
 ```
 
 规则：
 
-- 以上目录全部写入 `.gitignore`，不得提交；仓库只提交配置、脚本与文档。
-- 扫描或索引时必须排除这些目录，避免把工具产物当源码重复吃进去。
-- 产物可随时删除重建，删除不影响仓库内容。
-- 新引入工具时，先确定并登记产物落点，再运行。
-- Serena 项目路径必须传**仓库根**（`serena project create <repo>`）。
+- `codeintel/` 整体写入 `.gitignore`，**不得提交**；仓库只提交配置、脚本与文档。
+- 扫描/索引时必须排除 `codeintel/`，避免把工具产物当源码重复吃进去。
+- 产物可随时删除重建；删除不影响仓库内容。
+- 新引入工具时先确定落点并登记在本节，再运行。
+- **例外（工具限制，需登记而非忽略）**：
+  - CodeGraph 索引固定在用户级 `~\.codegraph\`，无数据目录选项，项目内不会出现其产物。
+  - Serena 把 `.serena/` 写死在项目根用于项目发现；本项目用目录联接
+    （`mklink /J .serena codeintel\serena`）让权威数据落在 `codeintel/serena/`。
+    重建 Serena 项目后需重新建立该联接。
+- Serena 项目路径必须传**仓库根**（`serena project create <repo>`）：传子目录会让 `.serena/` 嵌进子目录。
+

@@ -31,3 +31,4 @@ dist-release/
 graphify-out/
 .codegraph/
 pyi-work/
+codeintel/
