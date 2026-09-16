@@ -132,6 +132,40 @@ git worktree list                            # 查看现有工作区
 - 需要迁移或合并他人未提交改动时，先确认对方已停止编辑。
 - 修改公共规范（`agent/`、`docs/`）前先确认没有并行改动，避免规则漂移。
 
+
+
+## 改代码前：代码智能三件套（默认动作）
+
+写项目、改项目默认使用，不是可选步骤。目的只有一个：**改前知道会影响谁，改后知道要回归什么**。
+
+```text
+Graphify   架构级全貌      graphify extract <src-root> --code-only --no-cluster --out <out-dir>
+CodeGraph  项目级影响范围  codegraph-server --graph-only --workspace <src-root> --exclude node_modules --exclude dist
+Serena     符号级定位与引用 serena.exe（按项目语言显式启用语言服务器）
+```
+
+标准动作：
+
+```text
+1. 界定范围     本次改哪些文件/符号，不要"整个项目"
+2. 划影响范围   CodeGraph 看调用方与被调用方 → 得出回归边界
+3. 定位与引用   Serena 找符号定义与全部引用 → 确认没有遗漏调用方
+4. 动手改       跨文件调用点同步处理
+5. 按边界回归   改共享组件要复测依赖它的一方，而不是只跑被改文件
+6. 收尾对照     git status --short 前后对照；清理 .serena/ 与 graphify-out/（或确认已忽略）
+```
+
+约束：
+
+```text
+- 只读优先：首次在本项目使用工具时只出报告、不改代码，确认图谱质量后再纳入日常
+- 工具是用户级安装，不进本项目依赖、不改 package.json、不把工具源码放进仓库
+- 只扫 src 与 backend，不扫 node_modules / dist / 构建产物（否则图谱被 bundle 噪声污染）
+- .serena/ 与 graphify-out/ 不入库；已加入 .gitignore
+- 经验沉淀：每次使用后把可复用结论追加到共享技能 code-intelligence-tooling 的
+  references/experience-log.md（写结论与判据，不写"试过了"）
+- 工具输出只是证据输入，不能替代用户批准的范围边界或验收标准
+```
 ## 治理数据回补与跨目录比对
 
 - **向共享仓治理目录回补历史产物，必须走项目自己的发布函数**（如 `services.governance.publish_inspection_report`），不要按文件字节复制：治理目录里是信封格式（`member` / `published_at` / `report`），命名还去掉了 `inspection-` 前缀，直接复制会同时产出**格式错误**与**重复文件**。

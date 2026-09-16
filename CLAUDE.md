@@ -1,5 +1,10 @@
 # Claude 入口
 
+## 代码智能三件套（改代码前默认动作）
+
+动手改代码前，按 `agent/workflow.md` 的「代码智能三件套」执行：CodeGraph 划影响范围 →
+Serena 查符号与引用 → 改 → 按边界回归。工具与经验沉淀见共享技能 `code-intelligence-tooling`。
+
 本文件是 Claude Code 在本项目中的最小入口，不承载独立的项目规则。
 
 开始任务前必须阅读：
