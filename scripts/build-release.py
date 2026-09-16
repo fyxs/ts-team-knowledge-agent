@@ -78,7 +78,7 @@ def ensure_bundled_uv(bundle: Path, out_dir: Path, version: str = UV_VERSION) ->
     if target.exists():
         return target
     target.parent.mkdir(parents=True, exist_ok=True)
-    cache = out_dir / "cache"
+    cache = PROJECT_ROOT / ".cache" / "uv-bundle"
     cache.mkdir(parents=True, exist_ok=True)
 
     # 路线一：PyPI 上的 uv wheel 里就有 uv.exe（*.data/scripts/uv.exe）
@@ -124,7 +124,8 @@ def write_bundle_readme(bundle: Path) -> Path:
     return target
 
 
-def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: bool = True) -> Path:
+def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: bool = True,
+                 clean_intermediates: bool = True) -> Path:
     """用 PyInstaller 产出免安装目录，并打成 zip（exe 分发件）。"""
 
     import zipfile
@@ -166,6 +167,11 @@ def build_bundle(out_dir: Path, build_python: Path | None = None, *, bundle_uv: 
         for path in bundle.rglob('*'):
             if path.is_file():
                 handle.write(path, Path('ts-team-kb') / path.relative_to(bundle))
+    if clean_intermediates:
+        for stale in (out_dir / 'pyi-work', target):
+            if stale.exists():
+                shutil.rmtree(stale, ignore_errors=True)
+        print('intermediates cleaned: pyi-work/, packaging/')
     return archive
 
 
@@ -184,6 +190,7 @@ def main() -> int:
     parser.add_argument("--exe", action="store_true", help="同时构建免安装目录并打包 zip")
     parser.add_argument("--build-python", default=None, help="含 PyInstaller 的解释器路径")
     parser.add_argument("--no-bundle-uv", action="store_true", help="不把 uv.exe 打进免安装包")
+    parser.add_argument("--keep-intermediates", action="store_true", help="保留 PyInstaller 中间物（默认构建后清理）")
     args = parser.parse_args()
     wheel = build(Path(args.out))
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
@@ -192,7 +199,8 @@ def main() -> int:
     print(f"sha256={digest}")
     if args.exe:
         archive = build_bundle(Path(args.out), Path(args.build_python) if args.build_python else None,
-                               bundle_uv=not args.no_bundle_uv)
+                               bundle_uv=not args.no_bundle_uv,
+                           clean_intermediates=not args.keep_intermediates)
         print(f"zip={archive}")
         print(f"zip_bytes={archive.stat().st_size}")
         print(f"zip_sha256={hashlib.sha256(archive.read_bytes()).hexdigest()}")
