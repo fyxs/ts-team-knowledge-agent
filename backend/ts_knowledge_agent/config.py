@@ -98,6 +98,30 @@ class Settings:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+WORKSPACE_README_TEXT = """# 工作目录
+
+本目录是本机运行数据与共享知识仓的落点，**不是 Git 仓库**：
+除 `knowledge-base/` 之外的所有内容都不进入版本控制。
+
+| 条目 | 内容 | 处置 |
+| --- | --- | --- |
+| `ts-kb.json` | 本机运行配置（源目录、工作区、模型、扫描间隔） | 不要删除；改配置用 `ts-team-kb config` |
+| `data/` | 本机 SQLite（会话历史等） | 删除会丢失会话与状态 |
+| `logs/` | 运行日志、巡检与评测报告、使用埋点明细 | 按留存规则清理（报告保留最近 30 份，埋点长期保留） |
+| `runtime/` | 运行期锁与临时状态（如 `run.lock`，正常运行结束后会消失） | 可删，下次运行重建 |
+| `feedback/` | 本机反馈闭环记录（会导出到共享仓 `registries/`） | 不要删，属质量追溯 |
+| `secrets/` | 本机密钥（`model.key`），不进任何 Git 仓库 | 不要删；丢失需重配模型 |
+| `knowledge-base/` | 共享知识仓的本地克隆（唯一有版本控制的目录） | 不要手改，由应用同步 |
+| `run-*.cmd` / `run-*.vbs` | 启动器（由 `scripts/install-windows-tasks.ps1` 生成） | 由安装脚本重建，不要手改 |
+
+## 使用约定
+
+- 本工作目录由所有并发工作区（含 worktree）共享，不要在 worktree 内另建一套。
+- 动手前先确认服务与计划任务状态（8088 是否在监听、任务是否在跑），避免锁冲突。
+- 结构由 `ts-team-kb init` 初始化；本文件同样由 init 生成，可人工补充，但结构部分请保持与本表一致。
+"""
+
+
 def clone_knowledge_repo(settings: Settings) -> None:
     path = settings.shared_knowledge_repository_directory
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +146,7 @@ def initialize_working_directory(settings: Settings) -> None:
     settings.working_directory.mkdir(parents=True, exist_ok=True)
     for name in ("data", "logs", "runtime"):
         (settings.working_directory / name).mkdir(parents=True, exist_ok=True)
+    _write_workspace_readme(settings.working_directory)
     clone_knowledge_repo(settings)
     config_path = settings.working_directory / "ts-kb.json"
     settings.write_file(config_path)
@@ -130,3 +155,12 @@ def initialize_working_directory(settings: Settings) -> None:
     if not (settings.shared_knowledge_repository_directory / ".git").is_dir():
         raise RuntimeError("shared knowledge repository was not initialized")
     ensure_member_space(settings.shared_knowledge_repository_directory, settings.personal_workspace)
+
+
+def _write_workspace_readme(working_directory: Path) -> None:
+    """首次初始化时写入工作目录说明；已存在则不覆盖（允许人工补充）。"""
+
+    readme = working_directory / "README.md"
+    if readme.is_file():
+        return
+    readme.write_text(WORKSPACE_README_TEXT, encoding="utf-8")

@@ -121,7 +121,7 @@ TSKnowledgeAgentWebService   用户登录时自启（幂等守护：端口已在
 
 ```text
 源目录        只读
-本机          配置、SQLite（状态库 / 会话库）、日志、反馈、埋点、密钥、隔离产物
+本机          配置、SQLite、运行期锁目录 runtime/、日志、反馈（状态库 / 会话库）、日志、反馈、埋点、密钥、隔离产物
 Git 知识仓     知识 Markdown、图片、登记文件、治理报告（governance/<成员>/）
 ```
 

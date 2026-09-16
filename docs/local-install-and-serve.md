@@ -203,6 +203,23 @@ setup-mineru 复用已备环境；深自检通过：torch 2.14.0+cpu pipeline-ok
   这条真实转换链路 —— 只做浅自检会漏掉这类未声明依赖
 ```
 
+## 工作目录结构
+
+`ts-team-kb init` 会初始化工作目录，并在其中生成一份 `README.md` 自解释。结构如下：
+
+```text
+ts-kb.json          本机运行配置（源目录、工作区、模型、扫描间隔）
+data/               本机 SQLite（会话历史等）
+logs/               运行日志、巡检与评测报告、使用埋点明细
+runtime/            运行期锁与临时状态（run.lock，正常结束后消失）
+feedback/           本机反馈闭环记录（导出到共享仓 registries/）
+secrets/            本机密钥（model.key），不进任何 Git 仓库
+knowledge-base/     共享知识仓的本地克隆（唯一有版本控制的目录）
+run-*.cmd / *.vbs   启动器（由 scripts/install-windows-tasks.ps1 生成）
+```
+
+工作目录由所有并发工作区（含 worktree）共享，不要在 worktree 内另建一套。
+
 ## 权限与安全边界
 
 ```text
