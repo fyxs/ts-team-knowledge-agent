@@ -94,6 +94,42 @@ POST   /api/v1/chat、/api/v1/chat/stream  接受 session_id，落库用户消�
 程序性纠正  replaceState（分享链接指向已删除会话时回落到最近一条并改写地址栏）
 ```
 
+## 引用来源阅读
+
+回答里的引用默认是**路径字符串**（`citations: string[]`），点开看原文需要另外两条出口：
+
+```text
+GET /api/v1/knowledge/document?path=&offset=&limit=
+    → { path, title, content, offset, returned_lines, total_lines, truncated }
+    边界：members/ 之内、必须是 .md、只读；越界或非 md 400，文件不存在 404
+
+GET /api/v1/knowledge/asset?path=
+    → 文档内相对资源（实测是文档同级 images/ 下的图片）
+    与正文同一套边界，另加后缀白名单 jpg/jpeg/png/gif/webp/svg
+```
+
+结构化引用：`/api/v1/chat`、`/api/v1/chat/stream` 的 answer 事件与会话消息 payload 在
+`citations` 之外**追加** `sources`，原字段不动（CLI 与评测按字符串数组消费）：
+
+```text
+sources: [{ path, title, hits: [{ line, snippet }] }]
+```
+
+命中行号由 `locate_sources` 在**规范化之后**的全文上定位（提问分词后逐行计分，按分数取前 3 处、
+再按行号升序）。没有检索词（模型只 `knowledge_read` 过）时 `hits` 为空，界面显示「已引用」，
+不编造命中。
+
+三处必须一起看约定，否则引用会跳到别的地方：
+
+```text
+坐标一致   命中行号按规范化后的全文算；document 接口也是「先整篇读、再按行切窗口」，
+           不能先切窗口再规范化——含多行 HTML 表格的文档行数会变
+表格        MinerU 原始 <table> 在 document 接口规范化为 GFM 管道表（实测 10/104 篇），
+           索引内容与 agent 读到的内容保持原样，两边的行为可分别回归
+图片        文档内相对图片重写为 asset 路由；作者本机路径（Typora 导出）与站外 http 图片
+           取不到也不热链，如实标成「图片不可用」或给出外部链接
+```
+
 ## 治理与自检
 
 三类治理产物都落在共享知识仓 `governance/<成员>/` 下，随既有同步推送：

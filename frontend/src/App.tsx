@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AnswerSource } from "./api/agent";
 import { Composer } from "./components/Composer";
 import { FocusView } from "./components/FocusView";
 import { MessageList } from "./components/MessageList";
@@ -6,6 +7,7 @@ import { Modal } from "./components/Modal";
 import { SessionDock } from "./components/SessionDock";
 import { SessionPanel } from "./components/SessionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { SourceReader } from "./components/SourceReader";
 import { useAgentChat } from "./hooks/useAgentChat";
 import { useSessions } from "./hooks/useSessions";
 import { useTheme } from "./hooks/useTheme";
@@ -37,6 +39,14 @@ export default function App() {
 
   /** 正在集中阅读的那条答案 id。范围就是一条答案，不涉及其它回答块。 */
   const [focusedId, setFocusedId] = useState<number | null>(null);
+
+  /** 正在阅读的那条引用来源。压在集中阅读与主视图之上，Esc 逐层退。 */
+  const [readerSource, setReaderSource] = useState<AnswerSource | null>(null);
+
+  useEffect(() => {
+    // 换会话就收起来源层：它属于某一条答案，跟着旧会话留着会指错文档。
+    setReaderSource(null);
+  }, [activeId]);
 
   const focused = useMemo(() => {
     if (focusedId === null) return null;
@@ -138,7 +148,7 @@ export default function App() {
             </div>
             <span className="model-chip">检索 + 引用</span>
           </div>
-          <MessageList messages={messages} onExpand={setFocusedId} />
+          <MessageList messages={messages} onExpand={setFocusedId} onOpenSource={setReaderSource} />
           <Composer busy={busy} onSend={handleSend} onStop={stop} />
         </div>
       </section>
@@ -173,8 +183,16 @@ export default function App() {
       )}
 
       {focused && (
-        <FocusView message={focused.message} question={focused.question} onClose={() => setFocusedId(null)} />
+        <FocusView
+          message={focused.message}
+          question={focused.question}
+          onClose={() => setFocusedId(null)}
+          onOpenSource={setReaderSource}
+          escDisabled={readerSource !== null}
+        />
       )}
+
+      {readerSource && <SourceReader source={readerSource} onClose={() => setReaderSource(null)} />}
     </main>
   );
 }

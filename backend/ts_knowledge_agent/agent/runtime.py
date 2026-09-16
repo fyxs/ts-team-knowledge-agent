@@ -12,6 +12,7 @@ from ts_knowledge_agent.agent.secrets import read_api_key
 from ts_knowledge_agent.agent.skills import Skill, load_skills
 from ts_knowledge_agent.agent.tools import TOOL_SCHEMAS, dispatch_tool
 from ts_knowledge_agent.config import Settings
+from ts_knowledge_agent.services.knowledge_tools import locate_sources
 
 DEFAULT_MAX_STEPS = 6
 
@@ -42,6 +43,9 @@ class AgentResult:
     # 本轮是否真正检索过知识库。模型偶尔会跳过检索直接作答，
     # 这里给出可判定的事实，供调用方提示或拦截。
     retrieved: bool = False
+    # citations 的结构化补充（标题 + 命中行号与片段）。路径字符串那条链路保持不变，
+    # CLI 与评测仍按字符串列表消费；界面要的是这一份。
+    sources: list[dict] = field(default_factory=list)
 
 
 class OpenAICompatibleProvider:
@@ -151,6 +155,17 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
         {"role": "user", "content": question},
     ]
     citations: list[str] = []
+    # 模型检索时用的查询词：结构化来源要据此在文档里定位命中行。
+    search_terms: list[str] = []
+
+    def build_sources() -> list[dict]:
+        """把本轮引用补成结构化来源（标题 + 命中行号与片段）。
+
+        只在出口算一次，且只查被引用的那几篇；模型没有检索词时不编造命中。
+        """
+
+        return [source.to_dict() for source in locate_sources(settings, _unique(citations), search_terms)]
+
     nudged = False
     emit({"type": "start", "question": question})
     for step in range(1, max_steps + 1):
@@ -164,6 +179,7 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     error=reply.error,
                     transcript=transcript,
                     retrieved=bool(citations),
+                    sources=build_sources(),
                 )
         if not reply.tool_calls:
             content = (reply.content or "").strip()
@@ -176,6 +192,7 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     steps=step,
                     error=f"provider returned tool markup as text ({markup}); tools were not honored",
                     transcript=transcript,
+                    sources=build_sources(),
                 )
             if not citations and not nudged and step < max_steps:
                 nudged = True
@@ -187,13 +204,15 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     }
                 )
                 continue
-            emit({"type": "answer", "content": content, "citations": _unique(citations), "steps": step, "retrieved": bool(citations)})
+            answer_sources = build_sources()
+            emit({"type": "answer", "content": content, "citations": _unique(citations), "sources": answer_sources, "steps": step, "retrieved": bool(citations)})
             return AgentResult(
                 answer=content,
                 citations=_unique(citations),
                 steps=step,
                 transcript=transcript,
                 retrieved=bool(citations),
+                sources=answer_sources,
             )
         transcript.append({
             "role": "assistant",
@@ -208,6 +227,10 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
             output = dispatch_tool(settings, active_skills, call["name"], call["arguments"])
             found = _paths_from(output) if call["name"] in CITATION_TOOLS else []
             citations.extend(found)
+            if call["name"] == "knowledge_search":
+                query = _query_argument(call.get("arguments"))
+                if query:
+                    search_terms.append(query)
             emit({"type": "tool_result", "name": call["name"], "paths": found, "step": step})
             transcript.append({"role": "tool", "tool_call_id": call["id"], "content": output})
     emit({"type": "error", "error": "max_steps_exceeded", "step": max_steps})
@@ -218,7 +241,17 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
         error="max_steps_exceeded",
         transcript=transcript,
         retrieved=bool(citations),
+        sources=build_sources(),
     )
+
+
+def _query_argument(arguments: object) -> str:
+    """取检索工具调用里的查询词；模型给的不是字符串时按「没有查询词」处理。"""
+
+    if not isinstance(arguments, dict):
+        return ""
+    value = arguments.get("query")
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _paths_from(output: str) -> list[str]:

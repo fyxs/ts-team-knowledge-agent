@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { AnswerSource } from "../api/agent";
 import type { ChatMessage } from "../hooks/useAgentChat";
 import { AnswerArticle } from "./AnswerArticle";
 import { ProcessBlock } from "./ProcessBlock";
@@ -7,9 +8,11 @@ type Props = {
   messages: ChatMessage[];
   /** 把某条答案切到集中阅读视图。 */
   onExpand: (id: number) => void;
+  /** 打开某条引用来源的阅读视图。 */
+  onOpenSource: (source: AnswerSource) => void;
 };
 
-export function MessageList({ messages, onExpand }: Props) {
+export function MessageList({ messages, onExpand, onOpenSource }: Props) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // 内容增长时保持在底部：真正的滚动发生在消息区内部。
@@ -52,6 +55,7 @@ export function MessageList({ messages, onExpand }: Props) {
             <AnswerArticle
               key={message.id}
               message={message}
+              onOpenSource={onOpenSource}
               action={
                 <button type="button" className="message-open" onClick={() => onExpand(message.id)}>
                   全屏

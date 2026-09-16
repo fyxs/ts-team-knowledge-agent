@@ -54,3 +54,34 @@ CodeGraph `pr_context`（dev 相对 main）：29 文件变更（+1830/−218）�
    索引会持久化成 `graph.db`（namespace 由项目名 + 哈希生成），后续会话可复用。
 4. Serena 的符号级查询在 CLI 上没有直接命令，需通过 MCP / LSP 会话使用；
    CLI 负责的能力是：建项目、索引、健康检查、memories。
+
+## 2026-09-16 | 引用来源阅读改动（Graphify + CodeGraph 复核）
+
+改动范围：后端 `agent/runtime.py`、`api/main.py`、`services/knowledge_tools.py`＋新增 `services/markdown.py`；
+前端 `components/SourceReader.tsx`（新增）、`AnswerArticle.tsx`、`MarkdownView.tsx`、`App.tsx`、`api/agent.ts`。
+
+| 工具 | 范围 | 结果 | 与上次对照 |
+| --- | --- | --- | --- |
+| Graphify | backend | 552 节点 / 1464 边 | 上次 496 / 1344（+56 / +120，对应新增模块与函数） |
+| Graphify | frontend/src | 124 节点 / 265 边 | 上次 94 / 193（+30 / +72，对应新增组件与测试） |
+| CodeGraph | backend | 48 文件解析 · 1198 节点 · 2504 边 · 34 条路由 | 上次 47 文件 · 580 节点 · 1133 边 · 16 路由 |
+
+回归边界（由读全量调用方 + 全量测试确认，未依赖工具结论）：
+
+```text
+citations 的消费方   cli/main.py（ask 输出、评测）、api/main.py（响应与会话落库）、前端 api/agent.ts
+                     → 因此 sources 走「追加」而不是改形，三处消费方零改动
+run_agent 的调用方   api/main.py、cli/main.py、services/evaluation.py、tests/
+MarkdownView 的宿主  AnswerArticle（新增可选 basePath，其余调用点不传即行为不变）
+AnswerArticle 的宿主 MessageList、FocusView（新增 onOpenSource，不传则引用退回不可点）
+```
+
+### 本轮踩到的点（下次直接用）
+
+1. `codegraph_get_callers` 不接受符号名：必须给 `nodeId` 或 `uri+line`；直接传 `{"symbol": "..."}`
+   返回 `Could not find starting node`。`codegraph_symbol_search` 给的是模糊匹配（查 `run_agent`
+   会先返回 `_run`），要拿 nodeId 得自己按 `symbol.name` 过滤。本轮未继续追符号级调用方，
+   影响范围由读调用方 + 全量测试确认。
+2. Graphify 的产物会**嵌套一层 `graphify-out/`**：`codeintel/graphify/<范围>/graphify-out/graph.json`。
+   本次把内层文件复制到约定落点 `codeintel/graphify/<范围>/graph.json`；内层目录留存待清理（可随时重建）。
+3. 每次 CodeGraph 运行会重新索引（本轮约 70 s，其中 memory 初始化占大头），一次会话里不要反复跑。

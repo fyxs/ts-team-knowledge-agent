@@ -1,3 +1,5 @@
+import type { AnswerSource } from "./agent";
+
 /**
  * 会话标题上限：与服务端 `TITLE_LIMIT` 保持一致（服务端是硬约束，前端限制只是体验）。
  * 只在这里定义一次，避免界面多处分头写死导致漂移。
@@ -20,6 +22,7 @@ export type StoredMessage = {
   kind: string;
   content?: string;
   citations?: string[];
+  sources?: AnswerSource[];
   retrieved?: boolean;
   steps?: number | StoredStep[];
   message?: string;

@@ -221,8 +221,23 @@ body{
 /* ---------- 引用来源 ---------- */
 .citation{margin-top:var(--space-4);padding-top:var(--space-3);border-top:1px solid var(--border)}
 .citation-title{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);margin-bottom:var(--space-2)}
-.citation ul{margin:0;padding-left:var(--space-5);color:var(--fg-2);font-size:var(--text-xs);line-height:1.7}
-.citation li{word-break:break-all}
+/* 引用行：整行可点，行尾一个常显箭头。行内单行省略，完整路径只进 title 与阅读层头部——
+   实测路径中位 64 字符、最长 154，铺开就会把命中信息挤没。命中数与位置写在行上，
+   用户才知道这条值不值得点。 */
+.citation ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
+.citation li{margin:0}
+.citation-row{display:flex;align-items:baseline;gap:var(--space-3);width:100%;padding:var(--space-2) var(--space-3);border:1px solid transparent;border-radius:var(--radius-md);background:transparent;color:var(--fg-2);font:inherit;font-size:var(--text-xs);text-align:left;text-decoration:none}
+button.citation-row{cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
+/* 悬浮只动背景与边框：文字色一律不动，对比度只能升不能降 */
+button.citation-row:hover{background:var(--accent-hover);border-color:var(--border-soft)}
+button.citation-row:active{background:var(--accent-active)}
+button.citation-row:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+button.citation-row:hover .citation-arrow{color:var(--fg)}
+.citation-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+.citation-meta{flex:none;font-family:var(--font-mono);color:var(--meta);white-space:nowrap}
+.citation-arrow{flex:none;color:var(--meta)}
+/* 旧会话只存了路径字符串：纯文本展示，不给一个点不开的可点态 */
+.citation-static{display:block;padding:var(--space-2) var(--space-3);font-family:var(--font-mono);color:var(--fg-2);word-break:break-all}
 
 /* ---------- 检索过程（防刷屏） ---------- */
 .process{align-self:stretch;width:100%;background:var(--surface-warm);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4)}
@@ -354,6 +369,7 @@ body{
 .session-list,
 .modal-body,
 .markdown-body pre,
+.source-body,
 .table-scroll {
   scrollbar-width: thin;                      /* Firefox */
   scrollbar-color: transparent transparent;
@@ -362,6 +378,7 @@ body{
 .session-list:hover,
 .modal-body:hover,
 .markdown-body pre:hover,
+.source-body,
 .table-scroll:hover {
   scrollbar-color: color-mix(in oklab, var(--fg) 22%, transparent) transparent;
 }
@@ -371,6 +388,7 @@ body{
 .session-list::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar,
 .markdown-body pre::-webkit-scrollbar,
+.source-body,
 .table-scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -379,6 +397,7 @@ body{
 .session-list::-webkit-scrollbar-track,
 .modal-body::-webkit-scrollbar-track,
 .markdown-body pre::-webkit-scrollbar-track,
+.source-body,
 .table-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -386,6 +405,7 @@ body{
 .session-list::-webkit-scrollbar-thumb,
 .modal-body::-webkit-scrollbar-thumb,
 .markdown-body pre::-webkit-scrollbar-thumb,
+.source-body,
 .table-scroll::-webkit-scrollbar-thumb {
   background-color: transparent;
   border: 3px solid transparent;               /* 内缩，视觉上更细 */
@@ -396,6 +416,7 @@ body{
 .session-list:hover::-webkit-scrollbar-thumb,
 .modal-body:hover::-webkit-scrollbar-thumb,
 .markdown-body pre:hover::-webkit-scrollbar-thumb,
+.source-body,
 .table-scroll:hover::-webkit-scrollbar-thumb {
   background-color: color-mix(in oklab, var(--fg) 20%, transparent);
 }
@@ -403,6 +424,7 @@ body{
 .session-list::-webkit-scrollbar-thumb:hover,
 .modal-body::-webkit-scrollbar-thumb:hover,
 .markdown-body pre::-webkit-scrollbar-thumb:hover,
+.source-body,
 .table-scroll::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in oklab, var(--fg) 32%, transparent);
 }
@@ -419,3 +441,50 @@ body{
 
 /* 未检索知识库时的提示：与错误态区分，用警告色 */
 .unretrieved-note{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border:1px solid color-mix(in oklab, var(--warn) 45%, var(--border));border-radius:var(--radius-md);background:color-mix(in oklab, var(--warn) 10%, var(--surface));color:var(--fg-2);font-size:var(--text-xs)}
+
+/* ---------- 文档内图片 ---------- */
+/* 能取到的：按原始比例放进正文，不锁死两轴、也不裁切。
+   取不到的（作者本机路径、站外地址）在正文里如实标出，不留一个破图方块。 */
+.markdown-body .content-img{display:block;max-width:100%;height:auto;margin:var(--space-4) 0;border:1px solid var(--border);border-radius:var(--radius-md)}
+.markdown-body .image-missing,
+.markdown-body .image-external{display:inline-block;margin:var(--space-3) 0;padding:var(--space-2) var(--space-3);border:1px dashed var(--border-soft);border-radius:var(--radius-md);color:var(--meta);font-size:var(--text-xs);text-decoration:none}
+.markdown-body .image-external{border-style:solid;color:var(--fg)}
+.markdown-body .image-external:hover{background:var(--accent-hover)}
+
+/* ---------- 来源阅读视图 ────────────────────────────────────────────
+   点引用行进来，落在这一条命中的那一段。整屏铺满，但顶部压一条阅读栏把
+   「这是哪篇、命中的哪几处、怎么回去」固定在视野里。
+   入口只有一个「返回答案」：去路唯一，再放一个 × 就是同功能重复；
+   Esc 在捕获阶段拦下，所以它与集中阅读各退一层，不会一次退两层。
+   正文沿用 .markdown-body 与 .content-img，不另起一套排版。 */
+.source-view{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;background:var(--bg)}
+.source-head{flex:none;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-4) var(--container-gutter-desktop);border-bottom:1px solid var(--border);background:var(--surface)}
+.source-head-top{display:flex;align-items:center;gap:var(--space-3)}
+.source-back{padding:0;border:0;background:transparent;color:var(--fg-2);font:inherit;font-size:var(--text-xs);cursor:pointer;transition:color var(--motion-fast) var(--ease-standard)}
+.source-back:hover{color:var(--fg)}
+.source-back:focus-visible{outline:none;box-shadow:var(--focus-ring);border-radius:var(--radius-sm)}
+.source-head h1{margin:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display);line-height:var(--leading-tight)}
+/* 完整路径只在这里铺开：窄屏折两三行也比省略号可靠——省略掉的那一段正是判断依据 */
+.source-path{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);word-break:break-all}
+.source-hits{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2)}
+.source-hits-label{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+.source-hit{padding:var(--space-1) var(--space-3);border:1px solid var(--border);border-radius:var(--radius-pill);background:var(--surface);color:var(--fg-2);font:inherit;font-family:var(--font-mono);font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.source-hit:hover{background:var(--accent-hover);color:var(--fg)}
+/* 当前命中：底色再深一档，文字同步提到 --fg —— 深底浅字，对比度是升的 */
+.source-hit.is-active{background:var(--accent-active);border-color:var(--border-soft);color:var(--fg)}
+.source-hit:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.source-body{flex:1;min-height:0;overflow-y:auto;padding:var(--space-6) var(--container-gutter-desktop) var(--space-12)}
+.source-body:focus-visible{outline:none}
+.source-body>.markdown-body{max-width:var(--content-max);margin:0 auto}
+/* 命中片段：单色体系里不给颜色，只加一档底色，文字仍是 --fg */
+.source-mark{background:var(--accent-active);color:var(--fg);border-radius:var(--radius-sm);padding:0 var(--space-1)}
+.source-status{max-width:var(--content-max);margin:0 auto;color:var(--meta);font-size:var(--text-sm)}
+.source-status-error{color:var(--danger)}
+.source-foot{max-width:var(--content-max);margin:var(--space-4) auto 0;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-top:var(--space-3);border-top:1px solid var(--border)}
+.source-progress{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+.source-progress-end{max-width:var(--content-max);margin:var(--space-4) auto 0}
+.source-more{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);color:var(--fg);padding:var(--space-2) var(--space-4);font:inherit;font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
+.source-more:hover:not(:disabled){background:var(--accent-hover);border-color:var(--border-soft)}
+.source-more:active:not(:disabled){background:var(--accent-active)}
+.source-more:disabled{opacity:.45;cursor:not-allowed}
+.source-more:focus-visible{outline:none;box-shadow:var(--focus-ring)}
