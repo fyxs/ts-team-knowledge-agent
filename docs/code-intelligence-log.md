@@ -82,6 +82,19 @@ AnswerArticle 的宿主 MessageList、FocusView（新增 onOpenSource，不传�
    返回 `Could not find starting node`。`codegraph_symbol_search` 给的是模糊匹配（查 `run_agent`
    会先返回 `_run`），要拿 nodeId 得自己按 `symbol.name` 过滤。本轮未继续追符号级调用方，
    影响范围由读调用方 + 全量测试确认。
-2. Graphify 的产物会**嵌套一层 `graphify-out/`**：`codeintel/graphify/<范围>/graphify-out/graph.json`。
-   本次把内层文件复制到约定落点 `codeintel/graphify/<范围>/graph.json`；内层目录留存待清理（可随时重建）。
+2. Graphify 的产物会**嵌套一层 `graphify-out/`**，这是工具的规范数据目录：`extract --out <DIR>` 固定写
+   `<DIR>/graphify-out/`，读取命令默认取 `graphify-out/graph.json`，`uninstall --purge` 也只删这一层。
+   落点已按该原生长度登记为 `codeintel/graphify/<范围>/graphify-out/`，不再手工上移（见下条记录）。
 3. 每次 CodeGraph 运行会重新索引（本轮约 70 s，其中 memory 初始化占大头），一次会话里不要反复跑。
+
+## 2026-09-16 | 产物落点校正（Graphify 0.9.49）
+
+背景：`codeintel/graphify/<范围>/` 下曾同时存在外层副本与内层 `graphify-out/`；手工「把内层内容上移一层」
+只搬了 `graph.json`，外层的 `manifest.json` 与 `cache/` 停在上一次运行 —— 落点会静默变旧，且没有任何提示。
+
+| 项 | 内容 |
+| --- | --- |
+| 动作 | 落点统一为 `codeintel/graphify/<范围>/graphify-out/`（`agent/engineering-rules.md`、`codeintel/README.md`）；删除旧外层副本（`graph.json` / `manifest.json` / `cache/` / `.graphify_root`）；`codeintel/README.md` 增「自检」段 |
+| 依据 | `graphify --help`：`extract --out DIR` 固定写 `<DIR>/graphify-out/`（无关闭选项）；`god-nodes` / `query` / `explain` / `affected` / `path` 默认取 `graphify-out/graph.json`；`uninstall --purge` 只删这一层 |
+| 核验 | 在 `<范围>` 目录下直接跑 `graphify god-nodes` 命中内层图：backend → Settings 89 / main() 59 / SessionStore 33；frontend-src → SettingsPanel() 9 / AnswerSource 8 / SourceReader() 6（含本轮新增组件） |
+| 结论 | 命令跑完即完整，`graph.json` / `manifest.json` / `cache/` 天然同版本；读取命令无需 `--graph` |

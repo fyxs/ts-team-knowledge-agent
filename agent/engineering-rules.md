@@ -154,9 +154,9 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 代码智能等开发工具会在仓库内产生索引与图谱。产物**统一收在一个目录下**，便于人工一眼分辨与审查：
 
 ```text
-codeintel/graphify/<范围>/graph.json   Graphify 图谱
-codeintel/serena/                      Serena 项目配置与符号缓存
-codeintel/README.md                    落点说明与重建方式
+codeintel/graphify/<范围>/graphify-out/   Graphify 图谱与增量缓存
+codeintel/serena/                         Serena 项目配置与符号缓存
+codeintel/README.md                       落点说明与重建方式
 ```
 
 规则：
@@ -165,6 +165,8 @@ codeintel/README.md                    落点说明与重建方式
 - 扫描/索引时必须排除 `codeintel/`，避免把工具产物当源码重复吃进去。
 - 产物可随时删除重建；删除不影响仓库内容。
 - 新引入工具时先确定落点并登记在本节，再运行。
+- Graphify 的 `graphify-out/` 是工具固定追加的规范数据目录（`extract --out <DIR>` 写 `<DIR>/graphify-out/`，
+  读取命令默认取 `graphify-out/graph.json`）：落点含这一层，不要手工上移。
 - **例外（工具限制，需登记而非忽略）**：
   - CodeGraph 索引固定在用户级 `~\.codegraph\`，无数据目录选项，项目内不会出现其产物。
   - Serena 把 `.serena/` 写死在项目根用于项目发现；本项目用目录联接

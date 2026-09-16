@@ -6,10 +6,15 @@
 ## 落点
 
 ```text
-codeintel/graphify/<范围>/graph.json   Graphify：架构级图谱（AST 节点与边）
-codeintel/serena/                      Serena：项目配置与符号缓存（LSP）
-codeintel/README.md                    本文件
+codeintel/graphify/<范围>/graphify-out/   Graphify：图谱（AST 节点与边）+ manifest.json + 增量 cache
+codeintel/serena/                         Serena：项目配置与符号缓存（LSP）
+codeintel/README.md                       本文件
 ```
+
+`graphify-out/` 是 Graphify 的**规范数据目录**，不可配置：`extract --out <DIR>` 固定写 `<DIR>/graphify-out/`，
+读取命令（`god-nodes` / `query` / `explain` / `affected` / `path`）默认取 `graphify-out/graph.json`，
+`uninstall --purge` 也只删这一层。所以落点直接认领这一层：**不要**把内层文件手工上移到 `<范围>/` 下——
+外层路径 Graphify 自己从不读取，手工上移只会让 graph.json / manifest.json / cache 停在不同时间点。
 
 ## 例外（工具不可配置，产物不在本目录）
 
@@ -26,9 +31,17 @@ Serena     权威数据目录可理解为 codeintel/serena/；
 
 ```text
 Graphify   graphify.exe extract <源码范围> --code-only --no-cluster --out codeintel/graphify/<范围>
-           （工具会再套一层 graphify-out/，生成后把内层内容上移一层）
+           （产物落在 …/<范围>/graphify-out/，该层由工具固定追加，无需也不应手工搬移）
 Serena     serena.exe project index <仓库根>
 CodeGraph  codegraph-server.exe --graph-only --workspace <源码范围> --run-tool codegraph_pr_context
+```
+
+## 自检（一条命令确认落点）
+
+```text
+cd codeintel/graphify/<范围> && graphify god-nodes
+  有输出即落点正确（该命令默认解析 graphify-out/graph.json）；
+  同时核对 graph.json / manifest.json / cache/ 的修改时间属同一次运行。
 ```
 
 ## 使用经验
