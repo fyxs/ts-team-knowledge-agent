@@ -244,14 +244,22 @@ Web 界面打不开：确认 frontend/dist/index.html 存在（需先构建）
 
 ## 构建与发布（维护者）
 
-构建依赖装在**项目自己的 `.venv`** 里，不需要单独的构建环境：
+**不要用项目 `.venv` 构建**：它是完整开发环境，PyInstaller 会把 MinerU / gradio / modelscope /
+opencv 等开发期依赖一起打进包。实测同一份源码：用 `.venv` 构建出 **56.9 MB** 的 zip，
+用只装必要依赖的构建环境是 **35.4 MB** —— 差 21.5 MB，且会把不需要的库发给同事。
 
 ```powershell
-# 一次性：装打包依赖（PyInstaller）
-.venv\Scripts\python.exe -m pip install pyinstaller
+# 专用构建环境（放在项目内，已 gitignore；不要放 C:\tmp —— 会被清理掉）
+py -3 -m venv .venv-build
+.venv-build\Scripts\python.exe -m pip install pyinstaller
 
-# 构建 wheel + 免安装包（zip 内含 tools/uv.exe 与《使用说明.txt》）
-.venv\Scripts\python.exe scripts\build-release.py --exe
+# 构建 wheel + 免安装包；--build-python 指向专用环境
+.venv-build\Scripts\python.exe scripts\build-release.py --exe `
+    --build-python .venv-build\Scripts\python.exe
+```
+
+发布件大小核对：zip ≈ 35 MB（含 `tools/uv.exe` 41.5 MB 未压缩前的体积影响）、
+wheel ≈ 210 KB。若明显偏大，先怀疑构建环境混入了开发依赖。
 
 # 发布（默认 dry-run，看清 tag 与资产后加 --apply）
 .venv\Scripts\python.exe scripts\publish-release.py --tag vX.Y.Z-previewN --prerelease `
