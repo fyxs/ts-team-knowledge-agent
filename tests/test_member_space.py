@@ -48,3 +48,39 @@ def test_helpers_agree_with_returned_paths(tmp_path):
 def test_empty_member_is_rejected(tmp_path):
     with pytest.raises(ValueError):
         member_knowledge_directory(tmp_path, "  ")
+
+
+def test_governance_readme_lives_at_directory_level_and_member_readme_is_member_scoped(tmp_path):
+    """目录级说明写在 governance/README.md；成员目录下是成员级说明。
+
+    历史版本把目录级文本写进了 governance/<成员>/README.md，
+    这里同时验证按标记修正历史错位内容的行为，以及幂等性。
+    """
+
+    from ts_knowledge_agent.services.member_space import (
+        GOVERNANCE_MEMBER_README_TEXT,
+        ensure_member_space,
+    )
+
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    legacy = root / "governance" / "whm"
+    legacy.mkdir(parents=True)
+    (legacy / "README.md").write_text(
+        "# 治理记录（governance）\n\n- 按成员划分：`governance/<成员>/`\n", encoding="utf-8"
+    )
+
+    ensure_member_space(root, "whm")
+
+    directory_readme = root / "governance" / "README.md"
+    assert directory_readme.is_file()
+    assert "按成员划分：`governance/<成员>/`" in directory_readme.read_text(encoding="utf-8")
+
+    member_readme = legacy / "README.md"
+    assert member_readme.read_text(encoding="utf-8") == GOVERNANCE_MEMBER_README_TEXT.format(member="whm")
+
+    before = member_readme.read_text(encoding="utf-8")
+    ensure_member_space(root, "whm")
+    assert member_readme.read_text(encoding="utf-8") == before
+
