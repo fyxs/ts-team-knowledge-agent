@@ -172,3 +172,18 @@ codeintel/README.md                    落点说明与重建方式
     重建 Serena 项目后需重新建立该联接。
 - Serena 项目路径必须传**仓库根**（`serena project create <repo>`）：传子目录会让 `.serena/` 嵌进子目录。
 
+## Windows 计划任务：不要用 VBS 等待模式
+
+失败教训（2026-09-16）：为让任务历史能看到业务退出码，把 `run-*-hidden.vbs` 里的
+`shell.Run "<cmd>", 0, False` 改成 `... , 0, True`（等待并回传）。结果**下一次敲门就挂死**：
+wscript 常驻、无子进程、无日志，任务停在 Running，后续触发全被跳过 —— 调度静默停摆。
+
+规则：
+- 作业类任务（scheduler / inspection / evaluation）**直接注册 powershell.exe 动作**，
+  不经 VBS 包装器；脚本末尾以 CLI 退出码结束（`exit $LASTEXITCODE`）。
+- VBS 包装器只用于**常驻**进程（Web 服务）且保持 `False`（不等待）。
+- 常驻/长任务禁止依赖"任务历史里的退出码"作为唯一信号；业务结果要落到**运行记录与报告**里。
+- 实测结论：本机任务为 Interactive 登录类型时，`LastTaskResult` **不反映动作退出码**
+  （三个显式 `exit 3` 的探针任务均报 0），Task Scheduler 事件日志亦为关闭状态。
+  因此"系统视角"不可靠，可见性以业务记录（`logs/runs.jsonl` 的 `result` 字段、
+  巡检报告的 `run_health` 段）为准。

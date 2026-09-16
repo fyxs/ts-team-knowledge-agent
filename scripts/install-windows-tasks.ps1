@@ -50,7 +50,8 @@ function New-Launcher {
         'Set shell = CreateObject("WScript.Shell")',
         ('shell.Environment("Process")("TS_KB_CONFIG") = "' + $configPath + '"'),
         ('shell.CurrentDirectory = "' + $work + '"'),
-        ('shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' + $Runner + '""", 0, False')
+        ('code = shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' + $Runner + '""", 0, True')
+        'WScript.Quit code'
     )
     Set-Content -LiteralPath $vbs -Value $lines -Encoding Default
     return $vbs
@@ -63,18 +64,20 @@ $vbsWeb = New-Launcher 'run-web-service-hidden.vbs' (Join-Path $root 'scripts\ru
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 try { $principal = New-ScheduledTaskPrincipal -UserId $TaskUser -LogonType Interactive -RunLevel Limited } catch { Write-Output ($_); exit 1 }
 
-$a1 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsScheduled + '"')
+# 作业任务直接跑 powershell：VBS 包装器用 shell.Run 等待模式会挂死，且退出码也传不出来
+# 仅 Web 服务（常驻）仍用 VBS 隐藏窗口
+$a1 = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $root 'scripts\run-scheduled.ps1') + '"')
 $t1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentScheduler' -Action $a1 -Trigger $t1 -Principal $principal -Settings $settings -Force | Out-Null
 
-$a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
+$a2 = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $root 'scripts\run-inspection.ps1') + '"')
 $t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
 
 $vbsEvaluation = $null
 if ($IncludeMaintenance) {
     $vbsEvaluation = New-Launcher 'run-evaluation-hidden.vbs' (Join-Path $root 'scripts\run-evaluation.ps1')
-    $a4 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsEvaluation + '"')
+    $a4 = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $root 'scripts\run-evaluation.ps1') + '"')
     $t4 = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At $EvaluationWeeklyAt
     Register-ScheduledTask -TaskName 'TSKnowledgeAgentEvaluation' -Action $a4 -Trigger $t4 -Principal $principal -Settings $settings -Force | Out-Null
 }
