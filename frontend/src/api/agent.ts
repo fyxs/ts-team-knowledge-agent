@@ -124,11 +124,17 @@ export async function streamQuestion(
   }
 }
 
-/** 读取被引用文档的正文。offset 是全文行号起点，界面据此按需取窗口而不是整篇加载。 */
+/** 读取被引用文档的正文。offset 是全文行号起点；来源阅读一次读全文，offset 只在需要跳读时用。 */
+/**
+ * 单次取回整篇正文的行数上限：来源阅读默认展示全文，与服务层 FULL_DOCUMENT_LIMIT 对齐。
+ * 触到上限时后端会回 truncated，界面据此如实说明「只显示了前 N 行」。
+ */
+export const KNOWLEDGE_FULL_DOCUMENT_LINES = 100_000;
+
 export async function fetchKnowledgeDocument(
   path: string,
   offset = 0,
-  limit = 200,
+  limit = KNOWLEDGE_FULL_DOCUMENT_LINES,
 ): Promise<KnowledgeDocument> {
   const params = new URLSearchParams({ path, offset: String(offset), limit: String(limit) });
   return readJson<KnowledgeDocument>(await fetch(`/api/v1/knowledge/document?${params.toString()}`));

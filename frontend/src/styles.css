@@ -492,13 +492,5 @@ button.citation-row:hover .citation-arrow{color:var(--fg)}
 /* 命中片段：单色体系里不给颜色，只加一档底色，文字仍是 --fg */
 .markdown-body mark{background:var(--accent-active);color:var(--fg);border-radius:2px;padding:1px 3px}
 .source-status{margin:0;color:var(--meta);font-size:var(--text-sm)}
+.source-status:last-child{margin-top:var(--space-4)}
 .source-status-error{color:var(--danger)}
-/* 读取更多：卡片底部的读数与按钮，安静到不影响正文 */
-.source-foot{display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);margin-top:var(--space-5);padding-top:var(--space-3);border-top:1px solid var(--border)}
-.source-progress{margin:0;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
-.source-progress-end{margin:var(--space-4) 0 0}
-.source-more{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);color:var(--fg);padding:var(--space-2) var(--space-4);font:inherit;font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
-.source-more:hover:not(:disabled){background:var(--accent-hover);border-color:var(--border-soft)}
-.source-more:active:not(:disabled){background:var(--accent-active)}
-.source-more:disabled{opacity:.45;cursor:not-allowed}
-.source-more:focus-visible{outline:none;box-shadow:var(--focus-ring)}

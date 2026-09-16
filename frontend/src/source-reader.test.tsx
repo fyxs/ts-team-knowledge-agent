@@ -8,26 +8,21 @@ import { estimateHitTop, highlightCandidates, landingScrollTop, markNeedle } fro
 
 const DOC_PATH = "members/whm/研发指南/前端架构/前端编码规范.md";
 const DOC_TITLE = "前端编码规范";
-const WINDOW_LINES = 300;
 const TOTAL_LINES = 512;
+const FULL_LIMIT = 100000;
 
-/** 已读窗口里的两处命中：窗口内的跳转要滚动，而不是重取。 */
+/** 四处在正文里的命中：第 42 / 120 / 468 / 500 行。全文一次读进来，它们都已在正文里。 */
 const FIRST_LINE = 42;
 const SECOND_LINE = 120;
-/** 已读窗口之外的两处命中：点它们必须先取一段包含命中行的窗口——「命中在更多里」的那条路。 */
 const THIRD_LINE = 468;
 const FOURTH_LINE = 500;
 
-/** 阅读层要从命中行上方 15 行开始取，而不是从文档开头开始。 */
-const FIRST_OFFSET = FIRST_LINE - 1 - 15; // 26 → 读第 27–326 行
-const SECOND_OFFSET = FIRST_OFFSET + WINDOW_LINES; // 326 → 继续读取下方从这里接
-const THIRD_OFFSET = THIRD_LINE - 1 - 15; // 452 → 跳第 468 行要先取这一段
-const FOURTH_OFFSET = FOURTH_LINE - 1 - 15; // 484
-
 const HIT_SNIPPET = "环境变量集中读取，禁止在业务代码里直接读 process.env。";
 const SECOND_HIT_SNIPPET = "只有 VITE_ 前缀的变量才会被注入前端。";
-const THIRD_HIT_SNIPPET = "命中落在已读窗口之外时先取一段包含它的窗口。";
-const FOURTH_HIT_SNIPPET = "连续点两处命中时后一次读取接管。";
+const THIRD_HIT_SNIPPET = "命中行离得很远时，点行号直接滚到那一处。";
+const FOURTH_HIT_SNIPPET = "连点两处命中时停在后点的那一处。";
+/** 只在文档末尾才看得到的段落：用它证明整篇一次读进来了。 */
+const TAIL_MARKER = "这一段在文档的末尾，只有整篇读进来才看得到。";
 
 const SESSION = { id: "s-env", title: "环境变量怎么读取？", updatedAt: Date.now() };
 
@@ -43,19 +38,36 @@ const STREAM = [
     `"steps":1,"retrieved":true}\n\n`,
 ];
 
-const FIRST_WINDOW_BODY = `# ${DOC_TITLE}\n\n## 环境变量\n\n${HIT_SNIPPET}\n\n## 密钥\n\n${SECOND_HIT_SNIPPET}\n`;
-const APPEND_BODY = `## 追加段\n\n这一段在第一次读取的窗口之外。\n\n${THIRD_HIT_SNIPPET}\n\n${FOURTH_HIT_SNIPPET}\n`;
-const THIRD_WINDOW_BODY = `## 再往后\n\n${THIRD_HIT_SNIPPET}\n`;
-const FOURTH_WINDOW_BODY = `## 更靠后\n\n${FOURTH_HIT_SNIPPET}\n`;
+const FILLER = Array.from({ length: 8 }, (_, index) => `第 ${index + 1} 段正文，与命中无关。`);
 
-type DocWindow = { content: string; returned_lines: number; truncated: boolean };
+const FULL_BODY = [
+  `# ${DOC_TITLE}`,
+  "",
+  "## 环境变量",
+  "",
+  HIT_SNIPPET,
+  "",
+  "## 密钥",
+  "",
+  SECOND_HIT_SNIPPET,
+  "",
+  "## 长文之后",
+  "",
+  ...FILLER,
+  "",
+  THIRD_HIT_SNIPPET,
+  "",
+  FOURTH_HIT_SNIPPET,
+  "",
+  TAIL_MARKER,
+].join("\n");
 
-/** 后端按 offset 返回的那一段窗口。档位与真实接口一致：从 offset 起最多 limit 行。 */
-const WINDOWS: Record<number, DocWindow> = {
-  [FIRST_OFFSET]: { content: FIRST_WINDOW_BODY, returned_lines: WINDOW_LINES, truncated: true },
-  [SECOND_OFFSET]: { content: APPEND_BODY, returned_lines: TOTAL_LINES - SECOND_OFFSET, truncated: false },
-  [THIRD_OFFSET]: { content: THIRD_WINDOW_BODY, returned_lines: TOTAL_LINES - THIRD_OFFSET, truncated: false },
-  [FOURTH_OFFSET]: { content: FOURTH_WINDOW_BODY, returned_lines: TOTAL_LINES - FOURTH_OFFSET, truncated: false },
+/** 命中片段 → 它在渲染结果里的高度，用来反推「落到了哪一处」。 */
+const TOPS: Record<string, number> = {
+  [HIT_SNIPPET]: 300,
+  [SECOND_HIT_SNIPPET]: 6000,
+  [THIRD_HIT_SNIPPET]: 9000,
+  [FOURTH_HIT_SNIPPET]: 12000,
 };
 
 function sseResponse(chunks: string[]): Response {
@@ -72,16 +84,6 @@ function sseResponse(chunks: string[]): Response {
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let docRequests: string[] = [];
-/** 需要造「后点的先回来」时，把某几段窗口的响应扣在这里，等测试放行。 */
-let heldOffsets: number[] = [];
-let heldResponses: Array<() => void> = [];
-
-function releaseHeld() {
-  const pending = heldResponses;
-  heldOffsets = [];
-  heldResponses = [];
-  pending.forEach((release) => release());
-}
 
 function handler(url: string): Response | Promise<Response> {
   const json = (payload: unknown) => new Response(JSON.stringify(payload), { status: 200 });
@@ -89,14 +91,15 @@ function handler(url: string): Response | Promise<Response> {
   if (url.includes("/api/v1/knowledge/document")) {
     docRequests.push(url);
     const offset = Number(new URL(url, "http://localhost").searchParams.get("offset") ?? 0);
-    const window = WINDOWS[offset] ?? { content: "", returned_lines: 0, truncated: false };
-    const payload = { path: DOC_PATH, title: DOC_TITLE, offset, total_lines: TOTAL_LINES, ...window };
-    if (heldOffsets.includes(offset)) {
-      return new Promise<Response>((resolve) => {
-        heldResponses.push(() => resolve(json(payload)));
-      });
-    }
-    return json(payload);
+    return json({
+      path: DOC_PATH,
+      title: DOC_TITLE,
+      content: FULL_BODY,
+      offset,
+      returned_lines: TOTAL_LINES,
+      total_lines: TOTAL_LINES,
+      truncated: false,
+    });
   }
   if (url.includes("/api/v1/sessions/")) return json({ session: SESSION, messages: [] });
   if (url.includes("/api/v1/sessions")) return json({ sessions: [SESSION] });
@@ -153,10 +156,16 @@ function pressEscape() {
   });
 }
 
+/** 阅读层要用的元素属性是临时改到 Element.prototype 上的，逐个记下来，用例结束再还回去。 */
+const patched: Array<{ prop: string; descriptor: PropertyDescriptor | undefined }> = [];
+
+function patchElement(prop: string, descriptor: PropertyDescriptor) {
+  patched.push({ prop, descriptor: Object.getOwnPropertyDescriptor(Element.prototype, prop) });
+  Object.defineProperty(Element.prototype, prop, { configurable: true, ...descriptor });
+}
+
 beforeEach(() => {
   docRequests = [];
-  heldOffsets = [];
-  heldResponses = [];
   localStorage.clear();
   document.documentElement.dataset.theme = "dark";
   window.history.replaceState({}, "", "/");
@@ -171,6 +180,11 @@ afterEach(() => {
   container?.remove();
   container = null;
   root = null;
+  while (patched.length) {
+    const { prop, descriptor } = patched.pop()!;
+    if (descriptor) Object.defineProperty(Element.prototype, prop, descriptor);
+    else delete (Element.prototype as unknown as Record<string, unknown>)[prop];
+  }
   vi.unstubAllGlobals();
   // 落点测试往 Element.prototype 上打过桩：不还原会渗到后面的用例里。
   vi.restoreAllMocks();
@@ -180,33 +194,38 @@ const reader = () => container?.querySelector(".source-view") as HTMLElement | n
 
 /**
  * jsdom 不做排版：滚动落点只能喂桩。滚动区高 800、顶部在内容坐标 0；
- * 每一处命中标记的高度由 topOfMark 给 —— 于是「落到了哪一处」可以从最终的 scrollTop 反推。
+ * 每一处命中标记的高度由 TOPS 给 —— 于是「落到了哪一处」可以从最终的 scrollTop 反推。
+ *
+ * 桩装在 Element.prototype 上，所以**可以在打开阅读层之前就装好** —— 首次落点发生在
+ * 文档进来的那一提交里，晚装就看不到了。
  */
-function stubScroll(topOfMark: (mark: HTMLElement) => number) {
-  const messages = reader()?.querySelector<HTMLElement>(".messages");
-  if (!messages) throw new Error("阅读层还没打开，没法给滚动落点喂桩");
+function stubScroll() {
   let scrollTop = 0;
   const rect = (top: number) =>
     ({ top, bottom: top + 22, left: 0, right: 0, width: 0, height: 22, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.classList.contains("messages")) return rect(0);
-    if (this.matches("mark[data-source-mark]")) return rect(topOfMark(this as HTMLElement));
+    if (this.matches("mark[data-source-mark]")) {
+      const mark = this as HTMLElement;
+      const top = Object.entries(TOPS).find(([snippet]) =>
+        highlightCandidates(snippet).some((candidate) => (mark.textContent ?? "").includes(candidate)),
+      );
+      // 标记的视口坐标随滚动上移：喂桩也要照这个来，否则落点会把已经滚过的那一段再加一遍。
+      return rect((top ? top[1] : 400) - scrollTop);
+    }
     return rect(40);
   });
-  Object.defineProperty(messages, "clientHeight", {
-    configurable: true,
+  patchElement("clientHeight", {
     get() {
       return 800;
     },
   });
-  Object.defineProperty(messages, "scrollHeight", {
-    configurable: true,
+  patchElement("scrollHeight", {
     get() {
       return 24000;
     },
   });
-  Object.defineProperty(messages, "scrollTop", {
-    configurable: true,
+  patchElement("scrollTop", {
     get() {
       return scrollTop;
     },
@@ -259,15 +278,28 @@ describe("citation source reader", () => {
     expect(row?.getAttribute("title")).toBe(DOC_PATH);
   });
 
-  it("opens the document at the hit line, not at the top of the file", async () => {
+  it("loads the whole document in one request and lands on the first hit", async () => {
+    const scroll = stubScroll();
     await openReader();
 
+    // 一次读全文：offset 0、上限跟服务层一致，没有第二次请求
     expect(docRequests.length).toBe(1);
     expect(docRequests[0]).toContain("/api/v1/knowledge/document?");
-    expect(docRequests[0]).toContain(`offset=${FIRST_OFFSET}`);
+    expect(docRequests[0]).toContain("offset=0");
+    expect(docRequests[0]).toContain(`limit=${FULL_LIMIT}`);
 
     const view = reader();
     expect(view).not.toBeNull();
+    const body = view?.querySelector(".source-doc")?.textContent ?? "";
+    // 开头的、末尾的都在正文里 —— 这就是「一次展全文」
+    expect(body).toContain("环境变量集中读取");
+    expect(body).toContain(TAIL_MARKER);
+    // 没有分页残留：没有「继续读取下方」、没有读数行、没有页脚
+    expect(view?.querySelector(".source-more")).toBeNull();
+    expect(view?.querySelector(".source-foot")).toBeNull();
+    expect(view?.querySelector(".source-progress")).toBeNull();
+    expect(view?.textContent).not.toContain("继续读取");
+
     // 文档名占满头部左侧：省略号只截字形，全名进 title 提示
     const heading = view?.querySelector<HTMLElement>(".focus-head h1");
     expect(heading?.textContent).toBe(DOC_TITLE);
@@ -282,16 +314,15 @@ describe("citation source reader", () => {
     expect(jumpButtons?.length).toBe(4);
     expect(jumpButtons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
     // 进来是自动落在第 1 处，那是落点不是选择：按钮一处都不预选。
-    expect([...(jumpButtons ?? [])].every((button) => button.getAttribute("aria-current") === "false")).toBe(
-      true,
-    );
+    expect([...(jumpButtons ?? [])].every((button) => button.getAttribute("aria-current") === "false")).toBe(true);
     expect(view?.querySelectorAll(".source-hit.is-active").length).toBe(0);
     // 卡片元信息行只留身份：路径 + 类型与行数，命中信息不再挂在这里
     expect(view?.querySelector(".source-doc-meta .source-hit-chip")).toBeNull();
     expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(DOC_PATH);
-    expect(view?.querySelector(".source-doc")?.textContent).toContain("环境变量集中读取");
+    expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(`共 ${TOTAL_LINES} 行`);
 
-    // 命中片段在正文里被标出来，阅读层不是只给一个行号
+    // 自动落点是「第 1 处命中那一行」，不是文档顶部
+    expect(scroll.value).toBe(TOPS[HIT_SNIPPET] - 24);
     const mark = view?.querySelector("mark[data-source-mark]");
     expect(mark?.textContent).toBeTruthy();
     expect(HIT_SNIPPET).toContain(mark?.textContent ?? "");
@@ -328,84 +359,37 @@ describe("citation source reader", () => {
     expect(view?.querySelector(".source-doc-meta .source-hit")).toBeNull();
   });
 
-  it("continues reading below the loaded window and keeps the hit marked", async () => {
+  it("scrolls to every hit in the fully loaded document without fetching it again", async () => {
+    const scroll = stubScroll();
     await openReader();
 
-    expect(reader()?.querySelector(".source-progress")?.textContent).toContain(`共 ${TOTAL_LINES} 行`);
-    await act(async () => {
-      reader()?.querySelector<HTMLButtonElement>(".source-more")?.click();
-    });
-    await flush();
-
-    expect(docRequests.length).toBe(2);
-    expect(docRequests[1]).toContain(`offset=${SECOND_OFFSET}`);
-    const body = reader()?.querySelector(".source-doc")?.textContent ?? "";
-    expect(body).toContain("环境变量集中读取");
-    expect(body).toContain("这一段在第一次读取的窗口之外");
-    expect(reader()?.querySelector(".source-progress-end")?.textContent).toContain("已读到文档末尾");
-    // 追加读取不该把命中标记弄丢，也不该把读者拽回命中行
-    expect(reader()?.querySelector("mark[data-source-mark]")?.textContent).toBeTruthy();
+    const cases: Array<[number, string, number]> = [
+      [0, HIT_SNIPPET, FIRST_LINE],
+      [1, SECOND_HIT_SNIPPET, SECOND_LINE],
+      [2, THIRD_HIT_SNIPPET, THIRD_LINE],
+      [3, FOURTH_HIT_SNIPPET, FOURTH_LINE],
+    ];
+    for (const [index, snippet, line] of cases) {
+      await clickHit(index);
+      // 全文已经在正文里：跳转不取文档，只有打开那一次请求
+      expect(docRequests.length).toBe(1);
+      expect(scroll.value).toBe(TOPS[snippet] - 24);
+      expect(markedHits()).toEqual([`第 ${line} 行`]);
+      const mark = reader()?.querySelector("mark[data-source-mark]") as HTMLElement | null;
+      expect(mark).not.toBeNull();
+      expect(isMarkOf(mark as HTMLElement, snippet)).toBe(true);
+    }
   });
 
-  it("jumps to a hit beyond the loaded window by fetching a window around it", async () => {
+  it("stays on the hit you clicked last when two jumps are close together", async () => {
+    const scroll = stubScroll();
     await openReader();
-    // 长文的常态：命中的那一行在「更多」里，还没读进来。
-    const scroll = stubScroll(() => 300);
 
-    await clickHit(2);
-
-    expect(docRequests.length).toBe(2);
-    expect(docRequests[1]).toContain(`offset=${THIRD_OFFSET}`);
-    expect(docRequests[1]).toContain(`limit=${WINDOW_LINES}`);
-    // 新取的一段窗口回到内容顶部：命中行就在上方 15 行预读之后，落在视野里
-    expect(scroll.value).toBe(0);
-    const body = reader()?.querySelector(".source-doc")?.textContent ?? "";
-    expect(body).toContain(THIRD_HIT_SNIPPET);
-    expect(body).not.toContain("环境变量集中读取");
-    // 新窗口里这一处命中同样被标出来，不是只有窗口顶部
-    const mark = reader()?.querySelector("mark[data-source-mark]");
-    expect(mark?.textContent).toBeTruthy();
-    expect(isMarkOf(mark as HTMLElement, THIRD_HIT_SNIPPET)).toBe(true);
-    expect(markedHits()).toEqual([`第 ${THIRD_LINE} 行`]);
-    // 读数跟着新窗口走：跳到第 453 行往后，不是「已经读到过前面」
-    expect(reader()?.querySelector(".source-progress-end")?.textContent).toContain(`共 ${TOTAL_LINES} 行`);
-  });
-
-  it("does not refetch a hit that 继续读取 has already pulled into the window", async () => {
-    await openReader();
-    const scroll = stubScroll((mark) => (isMarkOf(mark, THIRD_HIT_SNIPPET) ? 5000 : 300));
-
-    await act(async () => {
-      reader()?.querySelector<HTMLButtonElement>(".source-more")?.click();
-    });
-    await flush();
-    expect(docRequests.length).toBe(2);
-
-    // 继续读下来之后第 468 行已经在已读窗口里：这一跳不该再取文档，直接滚到那一处
-    await clickHit(2);
-
-    expect(docRequests.length).toBe(2);
-    expect(scroll.value).toBe(5000 - 24);
-    expect(markedHits()).toEqual([`第 ${THIRD_LINE} 行`]);
-  });
-
-  it("keeps the hit you clicked last when two reads are in flight", async () => {
-    await openReader();
-    stubScroll((mark) => (isMarkOf(mark, FOURTH_HIT_SNIPPET) ? 9000 : 300));
-
-    // 第一跳的响应先扣住不给：模拟网络慢，后点的先回来了
-    heldOffsets = [THIRD_OFFSET];
     await clickHit(2);
     await clickHit(3);
-    expect(docRequests.length).toBe(3);
-    expect(reader()?.querySelector(".source-doc")?.textContent).toContain(FOURTH_HIT_SNIPPET);
 
-    // 放行那次过时的响应：它不能把读者拽回上一处命中
-    releaseHeld();
-    await flush();
-    const body = reader()?.querySelector(".source-doc")?.textContent ?? "";
-    expect(body).toContain(FOURTH_HIT_SNIPPET);
-    expect(body).not.toContain(THIRD_HIT_SNIPPET);
+    expect(docRequests.length).toBe(1);
+    expect(scroll.value).toBe(TOPS[FOURTH_HIT_SNIPPET] - 24);
     expect(markedHits()).toEqual([`第 ${FOURTH_LINE} 行`]);
   });
 
@@ -458,18 +442,6 @@ describe("citation source reader", () => {
     expect(container?.querySelector(".focus-view")).not.toBeNull();
   });
 
-  it("scrolls to a hit inside the loaded window instead of staying put", async () => {
-    await openReader();
-    // 两处命中给两个高度：落到第二处是 6000，落到第一处（= 落点还在读上一处命中）是 300。
-    const scroll = stubScroll((mark) => (isMarkOf(mark, SECOND_HIT_SNIPPET) ? 6000 : 300));
-
-    await clickHit(1);
-
-    // 命中处对到滚动区顶部留白处：6000 − 24。上一版把它钳在卡片顶端，点了几近等于没反应。
-    expect(scroll.value).toBe(6000 - 24);
-    expect(markedHits()).toEqual([`第 ${SECOND_LINE} 行`]);
-  });
-
   it("keeps the landing math honest", () => {
     // 命中处对到顶部留白处
     expect(landingScrollTop(6000)).toBe(5976);
@@ -478,12 +450,12 @@ describe("citation source reader", () => {
     expect(landingScrollTop(24)).toBe(0);
   });
 
-  it("estimates where the hit line sits in the window, for ranking and for the no-mark fallback", () => {
-    // 窗口从第 1 行起共 300 行：第 151 行在一半处
-    expect(estimateHitTop(600, 0, 300, 151)).toBe(300);
-    // 窗口从第 27 行起：同一行号要按窗口起点折算
+  it("estimates where the hit line sits, for ranking and for the no-mark fallback", () => {
+    // 整篇 512 行：第 257 行在一半处
+    expect(estimateHitTop(600, 0, 512, 257)).toBeCloseTo(300, 0);
+    // 从第 27 行开始读的那种窗口：同一行号要按窗口起点折算
     expect(estimateHitTop(600, 26, 300, 177)).toBe(300);
-    // 边界：命中在窗口第一行、在窗口之外、以及还没有排版高度时都不出错
+    // 边界：命中在窗口第一行、行号超出已读行数、以及还没有排版高度时都不出错
     expect(estimateHitTop(600, 0, 300, 1)).toBe(0);
     expect(estimateHitTop(600, 0, 300, 9999)).toBe(600);
     expect(estimateHitTop(0, 0, 300, 100)).toBe(0);
@@ -516,7 +488,7 @@ describe("citation source reader", () => {
     };
 
     // 短锚点（「同一句话」这种）在一屏里会出现多次：取离命中行最近的那一处，而不是一律拿第一处
-    expect(markNeedle(body(), "同一句话", 0)?.closest("p")?.getAttribute("data-top")).toBe("80");
+    expect(markNeedle(body(), "同一句话", 80)?.closest("p")?.getAttribute("data-top")).toBe("80");
     expect(markNeedle(body(), "同一句话", 5000)?.closest("p")?.getAttribute("data-top")).toBe("5000");
   });
 

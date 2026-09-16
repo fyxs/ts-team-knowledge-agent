@@ -2,10 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { fetchKnowledgeDocument, type AnswerSource, type KnowledgeDocument } from "../api/agent";
 import { MarkdownView } from "./MarkdownView";
 
-/** 一次读取的行数：足够覆盖一段上下文，又不至于把整篇文档灌进浏览器。 */
-const WINDOW_LINES = 300;
-/** 命中行上方预留的行数：落地时命中处不该贴着顶边。 */
-const PRE_ROLL_LINES = 15;
 /** 落点留白：命中处对到滚动区顶部时留这么高，文字才不贴边。 */
 const LANDING_AIR = 24;
 /**
@@ -13,9 +9,6 @@ const LANDING_AIR = 24;
  * 跨段落拼会拼出正文里并不存在的句子。
  */
 const BLOCK_SELECTOR = "p, li, td, th, dt, dd, h1, h2, h3, h4, h5, h6, blockquote, pre, figcaption";
-
-/** 跳转信号要的落点方式：新取的一段窗口 / 窗口内的某一处命中。 */
-type JumpAlign = "window" | "hit";
 
 /**
  * 「层」的落点：把命中处对到滚动区顶部下方留白处，不越过内容顶端。
@@ -32,10 +25,10 @@ export function highlightCandidates(snippet: string): string[] {
 }
 
 /**
- * 命中行在已读窗口里的估算高度（0–h）。行号排在窗口里的比例位置乘滚动高度。
+ * 命中行在整篇正文里的估算高度（0–h）。行号排在文档里的比例位置乘滚动高度。
  *
  * 它只做两件事，都不要求准：给「同一段文本在一屏里出现多次」排序，以及在命中文本
- * 定位不到时给个比窗口顶部更近的兜底。渲染后的行高不等（表格、代码块都更占地方），
+ * 定位不到时给个比文档顶部更近的兜底。渲染后的行高不等（表格、代码块都更占地方），
  * 所以估算不能被当成落点本身 —— 落点永远对到真标记上。
  */
 export function estimateHitTop(height: number, offset: number, returned: number, line: number): number {
@@ -197,8 +190,8 @@ type Props = {
  * 退出都是右上角那个 ×，Esc 同义；它与集中阅读各退一层，靠 App 显式让路而不是事件阶段
  * （见 FocusView 的 escDisabled）。
  *
- * 一次只读一段窗口：命中行不在已读窗口里时先取一段包含它的窗口再落地，读到的行数
- * 显示在卡片底部 —— 「跳过去了但没读那一段」不会被伪装成「已经读到了」。
+ * **一次读全文**：文档在打开时整篇取回，命中行号按钮只是滚动到那一处。不做「继续读取下方」
+ * 的分页（实测知识库最大一篇 1344 行、渲染 107 ms，瓶颈到来之前不加机制）。
  */
 export function SourceReader({ source, onClose }: Props) {
   const [doc, setDoc] = useState<KnowledgeDocument | null>(null);
@@ -209,45 +202,37 @@ export function SourceReader({ source, onClose }: Props) {
    * 画成按下态，会被读成被选中。命中行本身在正文里照样标出来，位置信息一点没少。
    */
   const [hitPicked, setHitPicked] = useState(false);
-  const [jump, setJump] = useState<{ token: number; align: JumpAlign }>({ token: 0, align: "window" });
-  const [loading, setLoading] = useState(false);
+  /** 跳转信号：每次用户点行号或文档到位都自增一次，滚动只跟着它走。 */
+  const [jump, setJump] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  /** 读取请求的序号：连点两处命中时，先回来的那次不能覆盖后点的结果。 */
-  const requestRef = useRef(0);
-  /** 命中行在窗口里的估算高度，标命中时顺手记下，滚动那段在定位不到时用它兜底。 */
+  /** 命中行在正文里的估算高度，标命中时顺手记下，滚动那段在定位不到时用它兜底。 */
   const estimateRef = useRef(0);
   const hits = useMemo(() => source.hits ?? [], [source.hits]);
-  const firstLine = hits[0]?.line ?? null;
-
-  const loadWindow = useCallback(
-    async (line: number | null, hitIndex: number) => {
-      const offset = line === null ? 0 : Math.max(0, line - 1 - PRE_ROLL_LINES);
-      const token = (requestRef.current += 1);
-      setLoading(true);
-      setError(null);
-      setActiveHit(hitIndex);
-      try {
-        const next = await fetchKnowledgeDocument(source.path, offset, WINDOW_LINES);
-        if (token !== requestRef.current) return;
-        setDoc(next);
-        // 新取的一段窗口从头看：窗口本身就从命中行上方 15 行开始，
-        // 顶部同时给出「这是哪篇文档」和「命中的那一段」。
-        setJump((previous) => ({ token: previous.token + 1, align: "window" }));
-      } catch (failure) {
-        if (token !== requestRef.current) return;
-        setError(failure instanceof Error ? failure.message : String(failure));
-        setDoc(null);
-      } finally {
-        if (token === requestRef.current) setLoading(false);
-      }
-    },
-    [source.path],
-  );
 
   useEffect(() => {
-    void loadWindow(firstLine, 0);
-  }, [firstLine, loadWindow]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setDoc(null);
+    fetchKnowledgeDocument(source.path)
+      .then((next) => {
+        if (cancelled) return;
+        setDoc(next);
+      })
+      .catch((failure: unknown) => {
+        if (cancelled) return;
+        setError(failure instanceof Error ? failure.message : String(failure));
+        setDoc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [source.path]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -261,7 +246,7 @@ export function SourceReader({ source, onClose }: Props) {
     bodyRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // 标命中：正文一换就重标（追加读取后标记不会丢）。
+  // 标命中：正文一换就重标。
   // 必须是 useLayoutEffect 且排在下面那段滚动之前：同一提交里 React 按声明顺序跑布局副作用，
   // 标好命中再算落点，才落到「刚点的这一处」；用 useEffect 会晚一步，落点读到的是上一处命中。
   useLayoutEffect(() => {
@@ -270,26 +255,24 @@ export function SourceReader({ source, onClose }: Props) {
     clearMarks(container);
     const hit = hits[activeHit];
     estimateRef.current = hit ? estimateHitTop(container.scrollHeight, doc.offset, doc.returned_lines, hit.line) : 0;
-    if (!hit?.snippet) return;
-    for (const candidate of highlightCandidates(hit.snippet)) {
-      if (markNeedle(container, candidate, estimateRef.current)) return;
+    if (hit?.snippet) {
+      for (const candidate of highlightCandidates(hit.snippet)) {
+        if (markNeedle(container, candidate, estimateRef.current)) break;
+      }
     }
+    // 标好之后才放行滚动：正文是这一提交里刚进 DOM 的，命中位置要到这时候才量得到。
+    // 定位不到也照样放行 —— 滚动那段退到按行号估算的高度，而不是把读者留在文档顶部。
+    setJump((previous) => previous + 1);
   }, [doc, activeHit, hits]);
 
-  // 滚动只跟着跳转信号走：loadMore 不动 jump，追加读取就不会把读者拽回命中行。
-  // 用 useLayoutEffect 而不是 useEffect：正文换掉后浏览器还停在旧 scrollTop 上，
-  // 等绘制之后再纠正会先闪一帧错位的内容。
+  // 滚动只跟着跳转信号走：正文换掉后浏览器还停在旧 scrollTop 上，等绘制之后再纠正会先闪一帧错位的内容。
   useLayoutEffect(() => {
     const container = bodyRef.current;
-    if (!container) return;
-    if (jump.align === "window") {
-      container.scrollTop = 0;
-      return;
-    }
+    if (!container || !jump) return;
     const mark = container.querySelector<HTMLElement>("mark[data-source-mark]");
     if (!mark) {
       // 命中文本在渲染后的正文里定位不到（例如落在未渲染的原始 HTML 里）：退到按行号估算的
-      // 高度，而不是把读者拽回窗口顶部 —— 读过好几段之后，窗口顶部离命中可能有几屏远。
+      // 高度，而不是把读者拽回文档顶部 —— 读过好几段之后，文档顶部离命中可能有几屏远。
       container.scrollTop = landingScrollTop(estimateRef.current);
       return;
     }
@@ -299,51 +282,21 @@ export function SourceReader({ source, onClose }: Props) {
     const markTop =
       mark.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
     container.scrollTop = landingScrollTop(markTop);
-  }, [jump]);
+  }, [jump, doc]);
 
-  const jumpTo = (index: number) => {
-    const hit = hits[index];
-    if (!hit) return;
-    // 点了哪一处，哪一处才标成「当前落点」：按钮标的是用户的去处，不是自动落点。
-    setHitPicked(true);
-    const loadedFrom = doc ? doc.offset + 1 : 0;
-    const loadedTo = doc ? doc.offset + doc.returned_lines : 0;
-    if (!doc || hit.line < loadedFrom || hit.line > loadedTo) {
-      // 命中行还没读进来（在「更多」里）：先取一段包含它的窗口，落地由新窗口那一次负责。
-      void loadWindow(hit.line, index);
-      return;
-    }
-    setActiveHit(index);
-    // 窗口内的命中：把命中处对到顶部留白处。即使它已在视野里也照样对齐——按了要有位移，
-    // 落点固定在同一高度，读者一眼就知道跳到哪了。
-    setJump((previous) => ({ token: previous.token + 1, align: "hit" }));
-  };
+  const jumpTo = useCallback(
+    (index: number) => {
+      const hit = hits[index];
+      if (!hit) return;
+      // 点了哪一处，哪一处才标成「当前落点」：按钮标的是用户的去处，不是自动落点。
+      setHitPicked(true);
+      setActiveHit(index);
+      // 全文一次读进来，跳转不需要再取文档 —— 按了要有位移，落点固定在同一高度。
+      setJump((previous) => previous + 1);
+    },
+    [hits],
+  );
 
-  const loadMore = async () => {
-    if (!doc) return;
-    const token = (requestRef.current += 1);
-    const from = doc.offset + doc.returned_lines;
-    setLoading(true);
-    setError(null);
-    try {
-      const next = await fetchKnowledgeDocument(source.path, from, WINDOW_LINES);
-      if (token !== requestRef.current) return;
-      setDoc({
-        ...next,
-        offset: doc.offset,
-        content: `${doc.content}\n${next.content}`,
-        returned_lines: doc.returned_lines + next.returned_lines,
-      });
-    } catch (failure) {
-      if (token !== requestRef.current) return;
-      setError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      if (token === requestRef.current) setLoading(false);
-    }
-  };
-
-  const loadedFrom = doc ? doc.offset + 1 : 0;
-  const loadedTo = doc ? doc.offset + doc.returned_lines : 0;
   // 命中处数与跳转同在头部右端：命中不止一处时行号由按钮给出，胶囊只报处数；
   // 只有一处时没有按钮，行号就得由胶囊说清。
   const hitChip =
@@ -404,18 +357,12 @@ export function SourceReader({ source, onClose }: Props) {
             {loading && !doc && <p className="source-status">正在读取文档…</p>}
             {error && <p className="source-status source-status-error">读取失败：{error}</p>}
             {doc && <MarkdownView content={doc.content} basePath={doc.path} />}
-            {doc && doc.truncated && (
-              <div className="source-foot">
-                <span className="source-progress">
-                  已读第 {loadedFrom}–{loadedTo} 行 / 共 {doc.total_lines} 行
-                </span>
-                <button type="button" className="source-more" onClick={() => void loadMore()} disabled={loading}>
-                  {loading ? "读取中…" : "继续读取下方"}
-                </button>
-              </div>
-            )}
-            {doc && !doc.truncated && (
-              <p className="source-progress source-progress-end">已读到文档末尾 · 共 {doc.total_lines} 行</p>
+            {/* 单次读取有行数上限（服务层 FULL_DOCUMENT_LIMIT）：真的触到时要说明，
+                不能让半篇正文冒充全文。知识库现有最大一篇 1344 行，触不到。 */}
+            {doc?.truncated && (
+              <p className="source-status">
+                文档超出单次读取上限，仅显示前 {doc.returned_lines} 行（共 {doc.total_lines} 行）。
+              </p>
             )}
           </article>
         </div>
