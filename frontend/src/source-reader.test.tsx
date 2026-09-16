@@ -245,6 +245,35 @@ function isMarkOf(mark: HTMLElement, snippet: string): boolean {
   return highlightCandidates(snippet).some((candidate) => (mark.textContent ?? "").includes(candidate));
 }
 
+/**
+ * 高亮是给「被引用的那句话」的：标题（文档标题、章节标题）不是论据。真实语料里命中行
+ * 常常本身就是标题，点亮它读起来像「标题被选中」——这里锁住「标的一定是正文块」。
+ */
+describe("命中高亮只落在正文块上", () => {
+  it("标题里出现同样的文字时，标的是正文那一处", () => {
+    const body = document.createElement("div");
+    body.innerHTML =
+      "<h1>环境变量集中读取</h1><p>环境变量集中读取，禁止在业务代码里直接读 process.env。</p>";
+
+    const mark = markNeedle(body, "环境变量集中读取");
+
+    expect(mark).not.toBeNull();
+    expect(mark?.closest("p")).not.toBeNull();
+    expect(body.querySelector("h1 mark")).toBeNull();
+  });
+
+  it("同一句话既在标题又在正文时，跨节点匹配也不会标到标题上", () => {
+    const body = document.createElement("div");
+    body.innerHTML = "<h2>密钥不进前端</h2><p>密钥只放本机，不进前端。</p>";
+
+    const mark = markNeedle(body, "不进前端");
+
+    expect(mark).not.toBeNull();
+    expect(mark?.closest("p")).not.toBeNull();
+    expect(body.querySelector("h2 mark")).toBeNull();
+  });
+});
+
 async function openReader() {
   await ask();
   await act(async () => {

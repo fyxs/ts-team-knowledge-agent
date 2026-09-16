@@ -53,9 +53,9 @@ def test_search_citation_carries_title_and_hit_lines(tmp_path):
     source = result.sources[0]
     assert source["path"] == "members/whm/规范/前端编码规范.md"
     assert source["title"].startswith("前端编码规范")
-    # 命中行按行号升序；行号取自全量正文，前端据此落到被引用的那一段。
-    assert [hit["line"] for hit in source["hits"]] == [3, 5, 7]
-    assert "环境变量集中读取" in source["hits"][1]["snippet"]
+    # 命中行按行号升序，且只认正文行：第 3 行是标题「## 环境变量」，标题不算命中。
+    assert [hit["line"] for hit in source["hits"]] == [5, 7]
+    assert "环境变量集中读取" in source["hits"][0]["snippet"]
 
 
 def test_read_only_citation_keeps_source_without_inventing_hits(tmp_path):
@@ -131,10 +131,66 @@ def test_http_layer_carries_sources_to_the_client(monkeypatch, tmp_path):
     answer = [event for event in events if event["type"] == "answer"][-1]
     assert answer["citations"] == ["members/whm/规范/前端编码规范.md"]
     assert answer["sources"][0]["title"].startswith("前端编码规范")
-    assert [hit["line"] for hit in answer["sources"][0]["hits"]] == [3, 5, 7]
+    assert [hit["line"] for hit in answer["sources"][0]["hits"]] == [5, 7]
 
     # 历史会话回放同样要带 sources，否则重开一条会话，引用就退化成不可点的纯文本。
     session_id = client.get("/api/v1/sessions").json()["sessions"][0]["id"]
     messages = client.get(f"/api/v1/sessions/{session_id}/messages").json()["messages"]
     stored = [message for message in messages if message["kind"] == "answer"]
     assert stored and stored[0]["sources"][0]["path"] == "members/whm/规范/前端编码规范.md"
+
+
+def test_document_title_and_cover_lines_are_not_hits():
+    """标题不是论据：命中落在正文行上，文档标题与封面里的整行加粗行都不参与评分。
+
+    真实语料里这是常态：封面行短、检索词密度高，一旦参与评分就会挤掉正文行，
+    界面点进去看到的是「标题被涂了高亮」。
+    """
+
+    from ts_knowledge_agent.services.knowledge_tools import locate_source_hits
+
+    document = "\n".join(
+        [
+            "# AI-native 空调群控与能源运营系统",
+            "",
+            "**第一阶段产品设计文档**",
+            "",
+            "**运营辅助 × 规则运营 × 数据闭环**",
+            "",
+            "## 数据闭环",
+            "",
+            "关键人工动作自动采集覆盖率 ≥80%，不以「多采点位」代替决策数据闭环。",
+            "",
+            "| 指标 | 目标 |",
+            "| --- | --- |",
+            "| 数据闭环 | 覆盖率 ≥80% |",
+        ]
+    )
+
+    hits = locate_source_hits(document, ("数据闭环",))
+
+    # 第 1、3、5、7 行都是标题与封面行：命中只落在正文段落（第 9 行）与表格行（第 13 行）。
+    assert [hit.line for hit in hits] == [9, 13]
+
+
+def test_hash_comment_inside_code_fence_is_not_treated_as_a_title():
+    """代码块里的 # 是注释不是标题：围栏内的行照常可以是命中行。"""
+
+    from ts_knowledge_agent.services.knowledge_tools import locate_source_hits
+
+    document = "\n".join(
+        [
+            "# 部署手册",
+            "",
+            "```ini",
+            "# 数据闭环写入的开关",
+            "closed_loop = on",
+            "```",
+            "",
+            "其余说明。",
+        ]
+    )
+
+    hits = locate_source_hits(document, ("数据闭环",))
+
+    assert [hit.line for hit in hits] == [4]

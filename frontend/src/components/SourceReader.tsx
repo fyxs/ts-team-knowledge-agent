@@ -5,10 +5,16 @@ import { MarkdownView } from "./MarkdownView";
 /** 落点留白：命中处对到滚动区顶部时留这么高，文字才不贴边。 */
 const LANDING_AIR = 24;
 /**
+ * 标题不是论据：命中只标正文块（段落 / 列表 / 表格 / 引用 / 代码）。标题行既不作为高亮目标、
+ * 也不参与文本拼接 —— 真实语料里「命中」常常落在文档标题与章节标题上，点亮它读起来像
+ * 「标题被选中」，而它并不能说明答案出自哪一句话。
+ */
+const TITLE_SELECTOR = "h1, h2, h3, h4, h5, h6";
+/**
  * 一段话的边界：跨行内节点找命中时只在同一个块里把文本拼起来，不跨段落拼 ——
  * 跨段落拼会拼出正文里并不存在的句子。
  */
-const BLOCK_SELECTOR = "p, li, td, th, dt, dd, h1, h2, h3, h4, h5, h6, blockquote, pre, figcaption";
+const BLOCK_SELECTOR = "p, li, td, th, dt, dd, blockquote, pre, figcaption";
 
 /**
  * 「层」的落点：把命中处对到滚动区顶部下方留白处，不越过内容顶端。
@@ -55,6 +61,8 @@ function textNodes(root: Node): Text[] {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    // 标题整块跳过：标题里出现同一句话时，衬不出「这句话出自这里」。
+    if ((node as Text).parentElement?.closest(TITLE_SELECTOR)) continue;
     nodes.push(node as Text);
   }
   return nodes;

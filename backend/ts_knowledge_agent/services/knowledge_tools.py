@@ -248,6 +248,24 @@ def _line_snippet(line: str, needles: Sequence[str]) -> str:
     return f"{prefix}{flat[start:end].strip()}{suffix}"
 
 
+def _is_title_line(stripped: str) -> bool:
+    """标题行：ATX 标题、分隔线，或整行加粗（转换后的 md 里，文档封面与副标题就是这个形状）。
+
+    标题不是论据：它短、检索词密度高，一旦参与评分就会稳定挤掉正文行，读者点进去看到的
+    也是「标题被涂了色」——命中要落在「这句话出自这里」的那一句上。
+    """
+
+    if stripped.startswith("#"):
+        return True
+    if len(stripped) >= 3 and (set(stripped) <= {"-"} or set(stripped) <= {"="}):
+        return True
+    for wrapper in ("**", "__"):
+        if stripped.startswith(wrapper) and stripped.endswith(wrapper) and len(stripped) > len(wrapper) * 2:
+            if wrapper not in stripped[len(wrapper) : -len(wrapper)]:
+                return True
+    return False
+
+
 def locate_source_hits(
     content: str,
     needles: Sequence[str],
@@ -260,13 +278,23 @@ def locate_source_hits(
 
     按「命中片段数」挑行而不是取最前面的匹配行：中文二元片段会让大量行都命中，
     取最前面几行会稳定跳到与问题无关的段落。挑完再按行号升序，便于界面逐处跳转。
+
+    命中只认正文行：标题（ATX 标题、封面里的整行加粗行）不参与评分 —— 它是文档结构，
+    不说明答案出自哪句话，也不该被界面涂上高亮。
     """
 
     if not needles:
         return ()
     scored: list[tuple[int, int, str]] = []
+    fence = ""
     for line_number, line in enumerate(content.splitlines(), start=1):
-        if not line.strip():
+        stripped = line.strip()
+        marker = stripped[:3]
+        # 代码块围栏：块内的 # 是注释不是标题，所以围栏内不做标题判定。
+        if marker in ("```", "~~~"):
+            fence = "" if fence else marker
+            continue
+        if not stripped or (not fence and _is_title_line(stripped)):
             continue
         score = sum(1 for needle in needles if needle in line)
         if score:
