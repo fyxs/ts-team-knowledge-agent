@@ -12,6 +12,9 @@ DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL = "git@github.com:fyxs/ts-team-knowledge
 DEFAULT_SCAN_INTERVAL_MINUTES = 60
 MIN_SCAN_INTERVAL_MINUTES = 5
 
+DEFAULT_SOURCES_MAX_DISPLAY = 8
+DEFAULT_SOURCES_RELEVANCE_RATIO = 0.5
+
 
 def parse_interval_minutes(value: str | None) -> int:
     if value is None or not value.strip():
@@ -23,6 +26,32 @@ def parse_interval_minutes(value: str | None) -> int:
     if minutes < MIN_SCAN_INTERVAL_MINUTES:
         raise ValueError(f"scan interval must be at least {MIN_SCAN_INTERVAL_MINUTES} minutes")
     return minutes
+
+
+def parse_sources_max_display(value: object) -> int:
+    """展示来源条数上限；非法值直接报错，避免静默退回默认值。"""
+    if value is None or value == "":
+        return DEFAULT_SOURCES_MAX_DISPLAY
+    try:
+        count = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sources_max_display must be an integer") from exc
+    if count < 1:
+        raise ValueError("sources_max_display must be at least 1")
+    return count
+
+
+def parse_sources_relevance_ratio(value: object) -> float:
+    """证据强度阈值（相对最高强度）；低于该比例的来源不展示。"""
+    if value is None or value == "":
+        return DEFAULT_SOURCES_RELEVANCE_RATIO
+    try:
+        ratio = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sources_relevance_ratio must be a number") from exc
+    if not 0.0 <= ratio <= 1.0:
+        raise ValueError("sources_relevance_ratio must be between 0 and 1")
+    return ratio
 
 
 @dataclass(frozen=True)
@@ -41,6 +70,8 @@ class Settings:
     model_max_tokens: int = 4096
     model_max_steps: int = 8
     excluded_source_paths: tuple[str, ...] = ()
+    sources_max_display: int = DEFAULT_SOURCES_MAX_DISPLAY
+    sources_relevance_ratio: float = DEFAULT_SOURCES_RELEVANCE_RATIO
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -75,6 +106,8 @@ class Settings:
             excluded_source_paths=tuple(
                 str(item).strip() for item in (data.get("excluded_source_paths") or []) if str(item).strip()
             ),
+            sources_max_display=parse_sources_max_display(data.get("sources_max_display")),
+            sources_relevance_ratio=parse_sources_relevance_ratio(data.get("sources_relevance_ratio")),
         )
 
     def write_file(self, path: Path) -> None:
@@ -94,6 +127,8 @@ class Settings:
             "model_max_tokens": self.model_max_tokens,
             "model_max_steps": self.model_max_steps,
             "excluded_source_paths": list(self.excluded_source_paths),
+            "sources_max_display": self.sources_max_display,
+            "sources_relevance_ratio": self.sources_relevance_ratio,
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

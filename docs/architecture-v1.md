@@ -177,3 +177,16 @@ Git 知识仓     知识 Markdown、图片、登记文件、治理报告（gover
 ## 依赖边界
 
 MinerU 运行在**独立环境**中，通过配置项 `mineru_python` 指定解释器；它不作为应用自身的依赖安装，避免把 PyTorch 等重型依赖带进普通运行环境。
+
+## 答案来源展示规则
+
+来源数量由**证据强度**决定，不由「模型搜了几次」决定（此前一次提问可能带出 10 条以上来源）。
+
+```text
+证据强度 = 3×被 knowledge_read 打开过 + 2×关键词(FTS)命中 + min(命中次数, 3)
+只展示强度 ≥ 最高强度 × sources_relevance_ratio 的来源，再按 sources_max_display 截断
+citations 与 sources 使用同一份筛选结果（前端「来源（N）」读的是 citations）
+```
+
+配置项（写入工作目录 `ts-kb.json`）：`sources_max_display`（默认 8）、`sources_relevance_ratio`（默认 0.5）。
+纯函数 `rank_sources()` 位于 `backend/ts_knowledge_agent/agent/runtime.py`，单测见 `tests/test_source_ranking.py`。
