@@ -183,26 +183,36 @@ type Props = {
 };
 
 /**
- * 来源阅读：整屏放被引用的那篇文档，落在命中行并高亮。
+ * 来源阅读：整屏放被引用的那篇文档，命中行在正文里高亮。
  *
  * 结构照设计稿的集中阅读复用：.focus-view 外壳 + 单行头部（来源 / 文档名 / 右上角 ×）+
  * .messages 滚动区 + .source-doc 卡片（元信息行 + 正文）。头部与集中阅读完全同一套 ——
  * 退出都是右上角那个 ×，Esc 同义；它与集中阅读各退一层，靠 App 显式让路而不是事件阶段
  * （见 FocusView 的 escDisabled）。
  *
- * **一次读全文**：文档在打开时整篇取回，命中行号按钮只是滚动到那一处。不做「继续读取下方」
+ * **落点只在用户点过行号之后产生**：进层停在文档开头，命中片段在正文里已经标出来，
+ * 要跳哪一处由头部右端那排行号按钮决定（处数与跳转常驻头部，正文怎么滚都在）。
+ * 自动跳到第 1 处会让「一进来就在某一行上」被读成「已选中这一处」——落点是系统的，
+ * 选择是用户的，两者不能共用一个状态。**既然进层不落点，行号按钮就必须给全**：
+ * 只有一处命中时它同样是唯一的入口，不能因为「没别处可跳」就把入口也省掉。
+ *
+ * **一次读全文**：文档在打开时整篇取回，行号按钮只是滚动到那一处。不做「继续读取下方」
  * 的分页（实测知识库最大一篇 1344 行、渲染 107 ms，瓶颈到来之前不加机制）。
  */
 export function SourceReader({ source, onClose }: Props) {
   const [doc, setDoc] = useState<KnowledgeDocument | null>(null);
   const [activeHit, setActiveHit] = useState(0);
   /**
-   * 「当前在哪一处」只在用户点过行号之后才标到按钮上。
-   * 进阅读层是自动落在第 1 处命中上的 —— 那是落点，不是用户选的；一进来就把「第 42 行」
-   * 画成按下态，会被读成被选中。命中行本身在正文里照样标出来，位置信息一点没少。
+   * 「当前在哪一处」只在用户点过行号之后才标到按钮上：进阅读层不预选任何一处。
+   * 落点与它是同一件事——不点就不动，见下面标命中那段副作用。
    */
   const [hitPicked, setHitPicked] = useState(false);
-  /** 跳转信号：每次用户点行号或文档到位都自增一次，滚动只跟着它走。 */
+  /**
+   * 用户点过行号没有。它只决定「要不要放行滚动」，不参与渲染，所以用 ref：
+   * 点得比正文早时（文档还在取）得靠它在正文到位那一提交补上那一次滚动。
+   */
+  const pickedRef = useRef(false);
+  /** 跳转信号：用户点行号时自增一次，滚动只跟着它走。 */
   const [jump, setJump] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,8 +271,9 @@ export function SourceReader({ source, onClose }: Props) {
       }
     }
     // 标好之后才放行滚动：正文是这一提交里刚进 DOM 的，命中位置要到这时候才量得到。
-    // 定位不到也照样放行 —— 滚动那段退到按行号估算的高度，而不是把读者留在文档顶部。
-    setJump((previous) => previous + 1);
+    // 只在用户点过行号之后放行 —— 进阅读层不自动跳到第 1 处命中，停在文档开头；
+    // 用户点得比正文早时，也是在这里补上那一次滚动。
+    if (pickedRef.current) setJump((previous) => previous + 1);
   }, [doc, activeHit, hits]);
 
   // 滚动只跟着跳转信号走：正文换掉后浏览器还停在旧 scrollTop 上，等绘制之后再纠正会先闪一帧错位的内容。
@@ -282,7 +293,9 @@ export function SourceReader({ source, onClose }: Props) {
     const markTop =
       mark.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
     container.scrollTop = landingScrollTop(markTop);
-  }, [jump, doc]);
+    // 依赖里没有 doc：正文到位那一次不在这里滚。要不要滚由上面标命中那段决定
+    // （用户点过行号才放行）—— 否则「文档一到位就落点」就是自动跳到第 1 处命中。
+  }, [jump]);
 
   const jumpTo = useCallback(
     (index: number) => {
@@ -290,6 +303,7 @@ export function SourceReader({ source, onClose }: Props) {
       if (!hit) return;
       // 点了哪一处，哪一处才标成「当前落点」：按钮标的是用户的去处，不是自动落点。
       setHitPicked(true);
+      pickedRef.current = true;
       setActiveHit(index);
       // 全文一次读进来，跳转不需要再取文档 —— 按了要有位移，落点固定在同一高度。
       setJump((previous) => previous + 1);
@@ -297,14 +311,9 @@ export function SourceReader({ source, onClose }: Props) {
     [hits],
   );
 
-  // 命中处数与跳转同在头部右端：命中不止一处时行号由按钮给出，胶囊只报处数；
-  // 只有一处时没有按钮，行号就得由胶囊说清。
-  const hitChip =
-    hits.length === 0
-      ? "已引用"
-      : hits.length === 1
-        ? `命中 1 处 · 第 ${hits[0].line} 行`
-        : `命中 ${hits.length} 处`;
+  // 命中处数与跳转同在头部右端：胶囊只报处数，行号按钮给去处。
+  // 行号不再由胶囊说一遍 —— 唯一之处也由按钮承担，同一件事不写两次。
+  const hitChip = hits.length === 0 ? "已引用" : `命中 ${hits.length} 处`;
 
   return (
     <div className="focus-view source-view" role="dialog" aria-modal="true" aria-label="来源文档">
@@ -318,8 +327,9 @@ export function SourceReader({ source, onClose }: Props) {
             否则「这篇还命中了两处」在读过几屏之后就无从看见了。 */}
         <div className="focus-head-side">
           <span className="source-hit-chip">{hitChip}</span>
-          {/* 命中不止一处时才给跳转：一处的情况进来就在那一行上，没有别处可跳。 */}
-          {hits.length > 1 && (
+          {/* 有一处就给一个按钮：进阅读层不自动落点，按钮是到命中处的唯一入口
+              （唯一之处也一样），没有别处可跳并不是省掉入口的理由。 */}
+          {hits.length > 0 && (
             <div className="source-hits">
               {hits.map((hit, index) => (
                 // 进阅读层不预选任何一处：is-active 只跟用户点过的那一处走。

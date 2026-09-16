@@ -482,15 +482,16 @@ button.citation-row:hover .citation-arrow{color:var(--fg)}
 .source-hit{flex:none;height:22px;padding:0 var(--space-2);border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--meta);font:inherit;font-family:var(--font-mono);font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .source-hit:hover{background:var(--accent-hover);color:var(--fg)}
 /* 当前命中：底色再深一档，文字同步提到 --fg —— 深底浅字，对比度是升的 */
-/* 只有用户点过的命中才带 is-active：进阅读层是自动落在第 1 处上的，那是落点不是选择，
+/* 只有用户点过的命中才带 is-active：进阅读层不预选任何一处，落点只在点过行号之后产生，
    一进来就画成按下态会被读成「被选中」。 */
 .source-hit.is-active{background:var(--accent-active);border-color:var(--border-soft);color:var(--fg)}
 .source-hit:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 /* 文档内补 h2 层级：卡片里最大的层级是 h2，不该和答案正文的 h2 一样大 */
 .source-doc .markdown-body h2{margin:var(--space-6) 0 var(--space-2);font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display)}
 .source-doc .markdown-body h2:first-child{margin-top:0}
-/* 命中片段：单色体系里不给颜色，只加一档底色，文字仍是 --fg */
-.markdown-body mark{background:var(--accent-active);color:var(--fg);border-radius:2px;padding:1px 3px}
+/* 命中片段：单色体系里不给颜色，给一档够重的底色——命中要被一眼看见，
+   --accent-active 是交互态用的表面色，含蓄是它的职责，于是另开一个 --mark-bg */
+.markdown-body mark{background:var(--mark-bg);color:var(--fg);border-radius:2px;padding:1px 3px}
 .source-status{margin:0;color:var(--meta);font-size:var(--text-sm)}
 .source-status:last-child{margin-top:var(--space-4)}
 .source-status-error{color:var(--danger)}

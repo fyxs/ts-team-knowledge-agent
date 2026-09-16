@@ -94,7 +94,10 @@
    * --session-panel-w 历史会话列宽度。
    * --content-max-sessions 含会话列时的主区域上限：会话列展开时主区域要额外
    *               容纳一列，取它与 --content-max 的较大值，避免消息列被压窄。
-   * --dialog-w  确认框宽度：配置弹窗那档 560 是给表单的，两个按钮的二次确认用不着。 */
+   * --dialog-w  确认框宽度：配置弹窗那档 560 是给表单的，两个按钮的二次确认用不着。
+   * --mark-bg   正文里命中片段的底色。不复用 --accent-active：那个值要给按钮悬浮态用，
+   *               必须含蓄；而命中要被一眼看见，需要比卡片底色重一档。浅色 0.72 / 深色 0.5，
+   *               与各自卡片底色的对比约 2.5–3:1，文字仍是 --fg（≥5.5:1）。 */
   --overlay:                   oklch(0 0 0 / 0.28);
   --content-max:               var(--container-max);
   --content-max-wide:          1080px;
@@ -102,6 +105,7 @@
   --session-panel-w:           264px;
   --content-max-sessions:      1180px;
   --dialog-w:                  400px;
+  --mark-bg:                   oklch(0.72 0 0);
 
   color-scheme: light;
 }
@@ -140,6 +144,7 @@
 
   /* 应用扩展 */
   --overlay:                   oklch(0 0 0 / 0.6);
+  --mark-bg:                   oklch(0.5 0 0);
 
   color-scheme: dark;
 }

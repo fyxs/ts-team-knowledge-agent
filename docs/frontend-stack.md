@@ -73,3 +73,4 @@ C:\Users\86795\AppData\Roaming\Open Design\namespaces\release-stable-win\data\de
 | `--content-max-sessions` | 含会话列时的主区域上限（1180px）。宽屏下与 `--content-max` 取较大值，使消息列维持接近原来的阅读宽度 |
 | `--dialog-w` | 确认框宽度（400px）。删除等二次确认只有标题、一段说明和两个按钮，用不着配置弹窗那档 560px |
 | `--elev-float` | 浮层阴影：会话列抽屉、弹窗等脱离文档流的表面 |
+| `--mark-bg` | 正文里命中片段的底色（浅色 `oklch(0.72 0 0)` / 深色 `oklch(0.5 0 0)`）。不复用 `--accent-active`：那个值要给按钮悬浮态用，必须含蓄；命中要被一眼看见，需要与卡片底色拉开 2.5–3:1。文字仍是 `--fg` |

@@ -278,7 +278,7 @@ describe("citation source reader", () => {
     expect(row?.getAttribute("title")).toBe(DOC_PATH);
   });
 
-  it("loads the whole document in one request and lands on the first hit", async () => {
+  it("loads the whole document in one request and stays at the top until a hit is picked", async () => {
     const scroll = stubScroll();
     await openReader();
 
@@ -313,7 +313,7 @@ describe("citation source reader", () => {
     const jumpButtons = view?.querySelectorAll<HTMLButtonElement>(".focus-head-side .source-hit");
     expect(jumpButtons?.length).toBe(4);
     expect(jumpButtons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
-    // 进来是自动落在第 1 处，那是落点不是选择：按钮一处都不预选。
+    // 进层一处都不预选：落点只在点过行号之后产生，按钮标的是用户的去处。
     expect([...(jumpButtons ?? [])].every((button) => button.getAttribute("aria-current") === "false")).toBe(true);
     expect(view?.querySelectorAll(".source-hit.is-active").length).toBe(0);
     // 卡片元信息行只留身份：路径 + 类型与行数，命中信息不再挂在这里
@@ -321,8 +321,9 @@ describe("citation source reader", () => {
     expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(DOC_PATH);
     expect(view?.querySelector(".source-doc-meta")?.textContent).toContain(`共 ${TOTAL_LINES} 行`);
 
-    // 自动落点是「第 1 处命中那一行」，不是文档顶部
-    expect(scroll.value).toBe(TOPS[HIT_SNIPPET] - 24);
+    // 进层停在文档开头：不自动跳到第 1 处命中（落点只在用户点行号之后产生），
+    // 但命中片段已经在正文里标出来 —— 不跳不等于不标。
+    expect(scroll.value).toBe(0);
     const mark = view?.querySelector("mark[data-source-mark]");
     expect(mark?.textContent).toBeTruthy();
     expect(HIT_SNIPPET).toContain(mark?.textContent ?? "");
@@ -379,6 +380,40 @@ describe("citation source reader", () => {
       expect(mark).not.toBeNull();
       expect(isMarkOf(mark as HTMLElement, snippet)).toBe(true);
     }
+  });
+
+  it("lands on the hit picked while the document was still loading", async () => {
+    const scroll = stubScroll();
+    const deferred: { release?: () => void } = {};
+    const gate = new Promise<void>((resolve) => {
+      deferred.release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : String(input);
+        if (url.includes("/api/v1/knowledge/document")) await gate;
+        return handler(url);
+      }),
+    );
+
+    await ask();
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>(".citation-row")?.click();
+    });
+    await flush();
+    // 正文还没到：这一提交里量不到命中位置
+    expect(reader()?.querySelector("mark[data-source-mark]")).toBeNull();
+
+    await clickHit(2);
+    await act(async () => {
+      deferred.release?.();
+    });
+    await flush();
+
+    // 正文到位那一提交才滚得动 —— 点得比正文早也不能白点
+    expect(scroll.value).toBe(TOPS[THIRD_HIT_SNIPPET] - 24);
+    expect(markedHits()).toEqual([`第 ${THIRD_LINE} 行`]);
   });
 
   it("stays on the hit you clicked last when two jumps are close together", async () => {
@@ -508,5 +543,39 @@ describe("citation source reader", () => {
     await flush();
 
     expect(reader()?.querySelector(".source-status-error")?.textContent).toContain("读取失败");
+  });
+
+  it("gives the only hit its own jump button, since entering no longer lands on it", async () => {
+    const scroll = stubScroll();
+    const singleHit = [
+      'data: {"type":"start","question":"环境变量怎么读取？"}\n\n',
+      `data: {"type":"answer","content":"## 结论：环境变量集中读取。","citations":["${DOC_PATH}"],` +
+        `"sources":[{"path":"${DOC_PATH}","title":"${DOC_TITLE}",` +
+        `"hits":[{"line":${FIRST_LINE},"snippet":"${HIT_SNIPPET}"}]}],"steps":1,"retrieved":true}\n\n`,
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : String(input);
+        if (url.includes("/api/v1/chat/stream")) return Promise.resolve(sseResponse(singleHit));
+        return Promise.resolve(handler(url));
+      }),
+    );
+
+    await openReader();
+
+    const view = reader();
+    // 胶囊只报处数，行号由按钮说 —— 同一件事不在这条头部上写两遍
+    expect(view?.querySelector(".source-hit-chip")?.textContent).toBe("命中 1 处");
+    const buttons = view?.querySelectorAll<HTMLButtonElement>(".focus-head-side .source-hit");
+    expect(buttons?.length).toBe(1);
+    expect(buttons?.[0].textContent).toBe(`第 ${FIRST_LINE} 行`);
+    // 进层仍不落点，但入口给全：唯一之处也得点得到
+    expect(scroll.value).toBe(0);
+
+    await clickHit(0);
+    expect(scroll.value).toBe(TOPS[HIT_SNIPPET] - 24);
+    expect(markedHits()).toEqual([`第 ${FIRST_LINE} 行`]);
+    expect(docRequests.length).toBe(1);
   });
 });
