@@ -135,3 +135,13 @@ logs/*.log                  api 37KB · scheduled 37KB 线性增长   单文件�
 
 治理目录的保留上限已由代码保证：`publish_inspection_report` 走 `prune_inspection_reports`，
 `publish_evaluation_report` 默认 `keep=30`，因此共享仓不会无限增长。
+### 实测：任务历史不反映退出码
+
+三个探针任务（`cmd /c exit 3`、`powershell -Command "exit 3"`、`powershell -File`（脚本 exit 3））
+在 `schtasks /Run` 后 `LastTaskResult` **均报 0**；Task Scheduler 操作日志
+（`Microsoft-Windows-TaskScheduler/Operational`）默认关闭。
+
+结论：本机任务为 Interactive 登录类型时，**不要用任务历史判断业务成败**。
+作业任务已改为直接执行 `powershell.exe`（脚本以 CLI 退出码结束），这至少保证：
+进程级退出码正确、挂死不再发生（原 VBS `shell.Run(...,0,True)` 曾导致调度静默停摆）。
+业务可见性以 `logs/runs.jsonl` 的 `result` 字段与巡检报告的 `run_health` 段为准。
