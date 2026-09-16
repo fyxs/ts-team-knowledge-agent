@@ -241,3 +241,29 @@ Web 界面打不开：确认 frontend/dist/index.html 存在（需先构建）
 服务已启动但没有反应：看 logs/web-service.log 是否有 already-running、logs/api.log 是否报端口占用
 计划任务显示成功但没干活：任务返回码恒为 0（wscript 特性），要看工作目录下的业务日志判断
 ```
+
+## 构建与发布（维护者）
+
+构建依赖装在**项目自己的 `.venv`** 里，不需要单独的构建环境：
+
+```powershell
+# 一次性：装打包依赖（PyInstaller）
+.venv\Scripts\python.exe -m pip install pyinstaller
+
+# 构建 wheel + 免安装包（zip 内含 tools/uv.exe 与《使用说明.txt》）
+.venv\Scripts\python.exe scripts\build-release.py --exe
+
+# 发布（默认 dry-run，看清 tag 与资产后加 --apply）
+.venv\Scripts\python.exe scripts\publish-release.py --tag vX.Y.Z-previewN --prerelease `
+    --asset dist-release\ts-team-kb-X.Y.Z-win-x64.zip `
+    --asset dist-release\ts_team_knowledge_agent-X.Y.Z-py3-none-any.whl --apply
+```
+
+注意：
+
+- `build-release.py` 需要**含 PyInstaller 的解释器**；缺了会直接提示 `pip install -e .[build]`。
+  本项目把依赖装在 `.venv`，不要另建临时构建环境（放 `C:\tmp` 之类的目录会被清理掉）。
+- 本机安装 PyInstaller 时 pip 可能报 `WinError 448 不受信任的装入点`（DLP 环境已知问题），
+  但包实际已装好 —— 用 `python -c "import PyInstaller; print(PyInstaller.__version__)"` 复核，
+  不要只看 pip 退出码。
+- 发布后必须**回读 Release**：资产名、字节数、`state=uploaded` 三者一致才算完成。
