@@ -28,9 +28,23 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $env:TS_KB_CONFIG = $configPath
 $env:PYTHONPATH = Join-Path $root 'backend'
 Set-Location $root
-$listening = Get-NetTCPConnection -LocalPort 8088 -State Listen -ErrorAction SilentlyContinue
-if ($listening) {
-    Add-Content -LiteralPath (Join-Path $logDir 'web-service.log') -Value ('already-running pid=' + ($listening | Select-Object -First 1).OwningProcess + ' ' + (Get-Date -Format s))
+# 端口探测：Get-NetTCPConnection 在本机会长时间阻塞（实测把守护脚本卡死、任务停在 Running），
+# 改用 .NET TcpClient 直接连一次，1 秒超时，快速且不依赖 CIM。
+function Test-PortListening {
+    param([int]$Port)
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $task = $client.ConnectAsync('127.0.0.1', $Port)
+        if (-not $task.Wait(1000)) { return $false }
+        return $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Close()
+    }
+}
+if (Test-PortListening -Port 8088) {
+    Add-Content -LiteralPath (Join-Path $logDir 'web-service.log') -Value ('already-running ' + (Get-Date -Format s))
     exit 0
 }
 Add-Content -LiteralPath (Join-Path $logDir 'web-service.log') -Value ('starting ' + (Get-Date -Format s))
