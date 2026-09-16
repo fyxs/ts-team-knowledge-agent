@@ -76,8 +76,9 @@
 
 - `main` 为稳定分支，只接受经过验证的合并。
 - 日常开发与修复在 `dev` 分支进行，不直接向 `main` 提交。
-- 并行开发时从 `dev` 派生工作分支，命名为**当前分支名 + 数字**：`dev-1`、`dev-2`……
-  完成后合回 `dev`，由 `dev` 再合入 `main`。
+- 并行开发时从 `dev` 派生工作分支，命名为**当前分支名 + 主题**：`dev-session-event`、`dev-hermes-adapter`……
+  主题用业务语义，说明这次改动做什么；不要用纯序号（`dev-1`）——序号不表达归属，
+  多 Agent 并行时无法从分支名判断改动范围。完成后合回 `dev`，由 `dev` 再合入 `main`。
 - 提交到 `dev` 前仍须通过第 3 节验证的全部检查。
 - 需要进入 `main` 时，先确认验证通过，再由用户确认合并。
 
@@ -103,15 +104,19 @@
 ### 工作区
 
 ```bash
-git worktree add ../<repo>-<n> <branch>     # 新增并行工作区
-git worktree list                            # 查看现有工作区
+git worktree add .worktrees/<branch> <branch>   # 新增并行工作区（仓库内）
+git worktree list                                # 查看现有工作区
+git worktree remove .worktrees/<branch>          # 完成后移除
 ```
+
+工作区统一放**仓库内** `.worktrees/`（已在 `.gitignore` 中忽略），不在项目目录上一级散落兄弟目录
+——那样数量会随并行增长、归属不清。不要对仓库执行 `git clean -xdf`：会连同工作区内容一起删除。
 
 只在确实需要并行时创建；单线开发仍在主工作区进行。
 
 ### 分支
 
-- 基线分支 `dev`；并行分支按**当前分支名 + 数字**命名：`dev-1`、`dev-2`……
+- 基线分支 `dev`；并行分支按**当前分支名 + 主题**命名：`dev-<主题>`（业务语义）
 - 同一个分支不能同时检出到两个 worktree，因此并行 Agent 必须使用不同分支。
 - 各并行分支完成后合回 `dev`；`dev` 验证通过后再合入 `main`。
 
