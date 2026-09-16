@@ -71,7 +71,7 @@ def test_review_export_uses_real_feedback_fields(tmp_path):
     append_feedback(settings.working_directory, _feedback_record(str(knowledge / "接入文档.md")))
 
     assert export_review_records(settings) == 1
-    lines = (repo / "members" / "whm" / "reviews.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    lines = (repo / "registries" / "whm" / "reviews.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     import json
 
@@ -87,7 +87,7 @@ def test_review_export_never_leaks_absolute_paths(tmp_path):
     settings = _settings(tmp_path)
     append_feedback(settings.working_directory, _feedback_record(r"C:\Users\86795\secret\doc.md"))
     export_review_records(settings)
-    content = (settings.shared_knowledge_repository_directory / "members" / "whm" / "reviews.jsonl").read_text(encoding="utf-8")
+    content = (settings.shared_knowledge_repository_directory / "registries" / "whm" / "reviews.jsonl").read_text(encoding="utf-8")
     assert "C:\\Users" not in content
     assert "86795" not in content
 
@@ -95,7 +95,7 @@ def test_review_export_never_leaks_absolute_paths(tmp_path):
 def test_source_registry_is_idempotent(tmp_path):
     settings = _settings(tmp_path)
     run_once(settings, batch_size=5, converter=CredentialConverter())
-    registry = settings.shared_knowledge_repository_directory / "members" / "whm" / "sources.jsonl"
+    registry = settings.shared_knowledge_repository_directory / "registries" / "whm" / "sources.jsonl"
     first = registry.read_text(encoding="utf-8")
     write_source_registry(settings)
     assert registry.read_text(encoding="utf-8") == first

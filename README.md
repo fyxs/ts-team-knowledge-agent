@@ -138,7 +138,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 
 ```text
 知识输出结构      <文档名>/<文档名>.md + images/（Excel 另有 sheets/）
-登记文件          members/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
+登记文件          registries/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
 索引与状态        SQLite 只在本机，永不进入 Git
 会话消息结构      user / process / answer / error 四类；answer 保留检索引用与工具过程
 密钥              <工作目录>/secrets/model.key，不在任何 Git 仓库内
@@ -150,7 +150,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 质量门禁    空内容 / 乱码 / 无效 UTF-8 / 过短 / 缺标题 → 不入库，可重试
 凭据门禁    命中 sk- 密钥、真实 Bearer、apiKey 字段、私钥等 → 隔离输出并阻断同步
 来源登记    每条知识记录来源文件、SHA-256、转换器版本
-审查记录    问题以结构化记录留痕（members/<成员>/reviews.jsonl）
+审查记录    问题以结构化记录留痕（registries/<成员>/reviews.jsonl）
 ```
 
 ## 运行方式

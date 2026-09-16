@@ -53,7 +53,7 @@
 └─ images/…
 
 Excel：<文档名>/<文档名>.md + sheets/<工作表名>.md（大表按 5000 行分片）
-登记：members/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
+登记：registries/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
 ```
 
 不保留 `converted/`、`auto/`、`office/`、`candidate/`、`verified/` 等中间层，也不把 JSON、layout PDF 等中间产物写入知识库。

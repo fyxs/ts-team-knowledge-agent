@@ -12,8 +12,33 @@ from pathlib import Path
 
 MEMBERS_DIRECTORY = "members"
 GOVERNANCE_DIRECTORY = "governance"
+REGISTRIES_DIRECTORY = "registries"
 INSPECTION_SUBDIRECTORY = "inspection"
 KEEP_INSPECTION_REPORTS = 30
+
+REGISTRIES_README_TEXT = """# 登记表（registries）
+
+本目录存放各成员的来源登记、知识清单与审查导出，**不是知识内容**。
+
+- 按成员划分：`registries/<成员>/`
+- 与 `members/<成员>/`（知识正文）互不交叉；由应用在每轮转换后自动重写
+- 登记表是**派生产物**：可由知识目录与运行状态重建，不参与知识检索
+
+| 文件 | 内容 |
+| --- | --- |
+| `sources.jsonl` | 来源登记：源相对路径、SHA-256、状态、转换器与版本、转换时间、产物路径 |
+| `knowledge.jsonl` | 知识清单：路径、标题、字节数、图片数、来源指纹、转换时间 |
+| `reviews.jsonl` | 审查导出：质量问题、期望值与处置状态（本机反馈的共享副本） |
+"""
+
+REGISTRIES_MEMBER_README_TEXT = """# 登记表（{member}）
+
+本目录存放 **{member}** 这个成员的登记表：`sources.jsonl`、`knowledge.jsonl`、`reviews.jsonl`。
+
+- 由应用写入（每轮转换后自动重写），不要手工编辑
+- 目录级说明见上一层 `registries/README.md`
+
+"""
 
 MEMBER_README_TEXT = """# 个人知识空间（{member}）
 
@@ -80,13 +105,22 @@ def member_governance_directory(repository_root: Path, member: str) -> Path:
 
 
 def is_knowledge_document(relative_posix: str) -> bool:
-    """判断仓库内相对路径是否为知识文档：空间说明用 README 不算知识。"""
+    """判断仓库内相对路径是否为知识文档。
 
-    if relative_posix == "members/README.md":
-        return False
+    只有 `members/<成员>/` 下的 Markdown 才算知识：空间说明用 README 不算，
+    `governance/`（治理留痕）与 `registries/`（登记表，JSONL）同样不算。
+    这里做正向限定而非逐个排除，避免以后新增顶层目录时被误纳入索引。
+    """
+
     parts = relative_posix.split("/")
-    if len(parts) == 3 and parts[0] == MEMBERS_DIRECTORY and parts[2] == "README.md":
+    if not parts or parts[0] != MEMBERS_DIRECTORY:
         return False
+    # 空间说明文件：members/README.md 与 members/<成员>/README.md
+    if len(parts) == 2 and parts[1] == "README.md":
+        return False
+    if len(parts) == 3 and parts[2] == "README.md":
+        return False
+    # 更深层的 README.md 是成员自己写的知识文档，照常入索引
     return True
 
 
@@ -127,4 +161,16 @@ def ensure_member_space(repository_root: Path, member: str) -> dict[str, Path]:
         GOVERNANCE_MEMBER_README_TEXT.format(member=name),
         rewrite_legacy="按成员划分：`governance/<成员>/`",
     )
-    return {"knowledge": knowledge, "governance": governance, "governance_root": governance_root}
+    registries_root = Path(repository_root) / REGISTRIES_DIRECTORY
+    registries_root.mkdir(parents=True, exist_ok=True)
+    _write_readme(registries_root, REGISTRIES_README_TEXT)
+    registries = registries_root / name
+    registries.mkdir(parents=True, exist_ok=True)
+    _write_readme(registries, REGISTRIES_MEMBER_README_TEXT.format(member=name))
+
+    return {
+        "knowledge": knowledge,
+        "governance": governance,
+        "governance_root": governance_root,
+        "registries": registries,
+    }
