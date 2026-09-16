@@ -59,7 +59,7 @@ function New-Launcher {
 
 $vbsScheduled = New-Launcher 'run-scheduled-hidden.vbs' (Join-Path $root 'scripts\run-scheduled.ps1')
 $vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
-$vbsWeb = New-Launcher 'run-web-service-hidden.vbs' (Join-Path $root 'scripts\run-web-service.ps1')
+$vbsWeb = Join-Path $work 'run-web-service-hidden.vbs'
 
 # Direct-Service-Launcher：直接启动，避免守护脚本在任务上下文里卡死。
 $directLines = @(

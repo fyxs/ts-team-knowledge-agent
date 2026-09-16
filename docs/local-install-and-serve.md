@@ -92,7 +92,7 @@ Windows 上由计划任务调用 `scripts/` 下的运行脚本（经 wscript 隐
 | `TSKnowledgeAgentScheduler` | 每 5 分钟 | `run-scheduled.ps1` | 敲门；未到 `scan_interval_minutes` 则静默跳过 |
 | `TSKnowledgeAgentInspection` | 每天 08:30 | `run-inspection.ps1` | 错过时唤醒补跑 |
 | `TSKnowledgeAgentEvaluation` | 每周一 09:00 | `run-evaluation.ps1` | 安装时需带 `-IncludeMaintenance` |
-| `TSKnowledgeAgentWebService` | 用户登录时 | `run-web-service.ps1` | 幂等守护：8088 已在监听则直接退出 |
+| `TSKnowledgeAgentWebService` | 用户登录时 | `run-web-service-hidden.vbs（直接调用 run-api.cmd 的隐藏启动器）` | 幂等守护：8088 已在监听则直接退出 |
 
 任务由 `scripts/install-windows-tasks.ps1` 注册，可反复执行（幂等）：
 
@@ -119,7 +119,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <项目>\scripts\install-win
              --shared-source-directory <源目录>                          （按提示配模型：供应商 / 地址 / Key / 模型名）
 6. 配 MinerU 可选：把 mineru_python 指向已装好的 MinerU 解释器（缺省时 PDF / Office 转换不可用，Markdown 仍可复制）
 7. 注册任务  scripts\install-windows-tasks.ps1 -Workspace <工作目录> [-IncludeMaintenance]
-8. 起服务    scripts\run-web-service.ps1                                   （或等下次登录自启）
+8. 起服务    scripts\run-web-service-hidden.vbs（直接调用 run-api.cmd 的隐藏启动器）                                   （或等下次登录自启）
 9. 验证      浏览器打开 http://127.0.0.1:8088 能问答；ts-team-kb status 能看到源文件状态
 ```
 
@@ -138,7 +138,7 @@ Get-ScheduledTask -TaskName 'TSKnowledgeAgent*' | Get-ScheduledTaskInfo | Select
 Get-NetTCPConnection -LocalPort 8088 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
 
 # 重启 / 拉起（幂等：已在监听则什么都不做）
-powershell -NoProfile -ExecutionPolicy Bypass -File <项目>\scripts\run-web-service.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File <项目>\scripts\run-web-service-hidden.vbs（直接调用 run-api.cmd 的隐藏启动器）
 Start-ScheduledTask -TaskName 'TSKnowledgeAgentWebService'
 
 # 临时停掉自动任务（排查时用，记得恢复）
