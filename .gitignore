@@ -31,4 +31,5 @@ dist-release/
 graphify-out/
 .codegraph/
 pyi-work/
-codeintel/
+codeintel/*
+!codeintel/README.md
