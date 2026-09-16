@@ -6,9 +6,17 @@ from pathlib import Path
 from ts_knowledge_agent.config import Settings
 from ts_knowledge_agent.services.pipeline import RunSummary, run_once
 
+def _run_result(error: str | None) -> str:
+    """运行结果标签：ok / locked（被其它运行占用）/ failed。"""
+
+    if not error:
+        return "ok"
+    return "locked" if "already active" in error else "failed"
+
+
 def _write_run_report(settings: Settings, summary: RunSummary, started: str, ended: str, duration: float, error: str|None=None)->Path:
     path=settings.working_directory/"logs"/"runs.jsonl"; path.parent.mkdir(parents=True,exist_ok=True)
-    record={"started_at":started,"finished_at":ended,"duration_seconds":round(duration,3),"scanned":summary.scanned,"queued":summary.queued,"batches":summary.batches,"converted":summary.converted,"warned":summary.warned,"skipped":summary.skipped,"failed":summary.failed,"missing":summary.missing,"indexed":summary.indexed,"sync_status":summary.sync_status,"reason_counts":summary.reason_counts,"error":error}
+    record={"started_at":started,"finished_at":ended,"duration_seconds":round(duration,3),"scanned":summary.scanned,"queued":summary.queued,"batches":summary.batches,"converted":summary.converted,"warned":summary.warned,"skipped":summary.skipped,"failed":summary.failed,"missing":summary.missing,"indexed":summary.indexed,"sync_status":summary.sync_status,"reason_counts":summary.reason_counts,"result":_run_result(error),"error":error}
     with path.open("a",encoding="utf-8") as f: f.write(json.dumps(record,ensure_ascii=False)+"\n")
     return path
 

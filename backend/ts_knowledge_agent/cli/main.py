@@ -290,7 +290,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.if_due and not is_scan_due(settings):
             print(f"skipped=not_due scan_interval_minutes={settings.scan_interval_minutes}")
             return 0
-        summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
+        try:
+            summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
+        except RuntimeError as error:
+            if "already active" in str(error):
+                print(f"skipped=locked {error}")
+                return 3
+            raise
         print(
             f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} "
             f"skipped={summary.skipped} failed={summary.failed} missing={summary.missing} indexed={summary.indexed} "
@@ -478,6 +484,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(f"sampled={report.sampled} clean={report.clean} blocking={report.blocking}")
+            print(f"run_health: {report.run_health.summary}")
             for kind, count in report.issue_counts.items():
                 print(f"  {kind}: {count}")
             print(f"report={path}")
