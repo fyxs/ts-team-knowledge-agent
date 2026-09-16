@@ -164,12 +164,13 @@ describe("citation source reader", () => {
     expect(view).not.toBeNull();
     expect(view?.querySelector("h1")?.textContent).toBe(DOC_TITLE);
     expect(view?.querySelector(".source-path")?.textContent).toBe(DOC_PATH);
-    expect(view?.querySelector(".source-hits-label")?.textContent).toBe("命中 1 处");
-    expect(view?.querySelector(".source-hit.is-active")?.textContent).toBe(`第 ${FIRST_LINE} 行`);
-    expect(view?.querySelector(".source-body")?.textContent).toContain("环境变量集中读取");
+    expect(view?.querySelector(".source-hit-chip")?.textContent).toBe(`命中 1 处 · 第 ${FIRST_LINE} 行`);
+    // 只有一处命中时不给跳转：头部胶囊已经说明了位置，一个按钮无处可跳。
+    expect(view?.querySelector(".source-hit")).toBeNull();
+    expect(view?.querySelector(".source-doc")?.textContent).toContain("环境变量集中读取");
 
     // 命中片段在正文里被标出来，阅读层不是只给一个行号
-    const mark = view?.querySelector("mark.source-mark");
+    const mark = view?.querySelector("mark[data-source-mark]");
     expect(mark?.textContent).toBeTruthy();
     expect(HIT_SNIPPET).toContain(mark?.textContent ?? "");
   });
@@ -189,12 +190,12 @@ describe("citation source reader", () => {
 
     expect(docRequests.length).toBe(2);
     expect(docRequests[1]).toContain(`offset=${SECOND_OFFSET}`);
-    const body = reader()?.querySelector(".source-body")?.textContent ?? "";
+    const body = reader()?.querySelector(".source-doc")?.textContent ?? "";
     expect(body).toContain("环境变量集中读取");
     expect(body).toContain("这一段在第一次读取的窗口之外");
     expect(reader()?.querySelector(".source-progress-end")?.textContent).toContain("已读到文档末尾");
     // 追加读取不该把命中标记弄丢，也不该把读者拽回命中行
-    expect(reader()?.querySelector("mark.source-mark")?.textContent).toBeTruthy();
+    expect(reader()?.querySelector("mark[data-source-mark]")?.textContent).toBeTruthy();
   });
 
   it("closes the reader with Escape and leaves the focus view open", async () => {
