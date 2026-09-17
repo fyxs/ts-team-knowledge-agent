@@ -475,7 +475,7 @@ button.citation-row:hover .citation-arrow{color:var(--fg)}
 .focus-head-side{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:var(--space-3)}
 /* 命中胶囊：等宽小字，与它右边那组行号按钮同属一句「这篇命中在哪」。 */
 .source-hit-chip{flex:none;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);white-space:nowrap}
-/* 命中跳转：命中可能落在已读窗口之外，所以它能重新取一段。
+/* 命中跳转：进层不预选、也不重取内容（正文一次性读全文），点行号按钮才滚动落点。
    按钮多到一行放不下时这一条自己横向滚动（滚动条规则与 .messages 同组，悬浮才现），
    而不是把文档名和 × 顶出去；min-height 32 给滚动条留出高度，没有滚动条时按钮居中对齐。 */
 .source-hits{flex:0 1 auto;min-width:0;max-width:min(46vw,420px);min-height:32px;display:flex;align-items:center;gap:var(--space-1);overflow-x:auto;overflow-y:hidden}

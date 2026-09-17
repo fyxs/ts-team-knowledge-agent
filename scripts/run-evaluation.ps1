@@ -1,4 +1,4 @@
-﻿# Daily knowledge-base inspection; called by scheduled task TSKnowledgeAgentInspection.
+﻿# Weekly retrieval/citation evaluation; called by scheduled task TSKnowledgeAgentEvaluation.
 $ErrorActionPreference = 'Continue'
 
 # Portable: project root from this script's location; workspace from TS_KB_CONFIG,

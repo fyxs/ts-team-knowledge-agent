@@ -405,7 +405,7 @@ describe("agent chat shell", () => {
     );
     // 最近活动的会话落在「今天」分组
     expect(container?.querySelector(".session-group")?.textContent).toBe("今天");
-    // 会话内容接口尚未实现，选中会话从空状态开始
+    // 该会话在测试环境没有历史消息（messages 接口由 stub 返回空），因此显示空状态
     expect(container?.textContent).toContain("向团队知识库提问");
   });
 
