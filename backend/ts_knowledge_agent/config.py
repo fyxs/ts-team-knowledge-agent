@@ -16,6 +16,38 @@ DEFAULT_SOURCES_MAX_DISPLAY = 8
 DEFAULT_SOURCES_RELEVANCE_RATIO = 0.5
 
 
+def config_candidates() -> list[Path]:
+    """按优先级列出配置文件的候选位置。
+
+    init 把配置写到 <工作目录>\\ts-kb.json，而历史版本的其他命令会去找 <工作目录>\\.local\\ts-kb.json，
+    导致"init 明明成功、后续命令却说找不到配置"。这里统一成一份候选清单，谁先存在用谁。
+    """
+    candidates: list[Path] = []
+    explicit = os.getenv("TS_KB_CONFIG", "").strip()
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    candidates.append(Path.cwd() / "ts-kb.json")
+    candidates.append(Path.cwd() / ".local" / "ts-kb.json")
+    env_workdir = os.getenv("TS_KB_WORKING_DIRECTORY", "").strip()
+    if env_workdir:
+        candidates.append(Path(env_workdir).expanduser() / "ts-kb.json")
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def resolve_config_path() -> Path:
+    """返回第一个真实存在的候选路径；都不存在时返回优先级最高的那个（用于报错信息）。"""
+    candidates = config_candidates()
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
+
+
+
 def parse_interval_minutes(value: str | None) -> int:
     if value is None or not value.strip():
         return DEFAULT_SCAN_INTERVAL_MINUTES
@@ -75,10 +107,17 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        working_directory = Path(os.getenv("TS_KB_WORKING_DIRECTORY", ".local")).expanduser()
-        config_path = Path(os.getenv("TS_KB_CONFIG", str(working_directory / "ts-kb.json"))).expanduser()
+        config_path = resolve_config_path()
         if not config_path.is_file():
-            raise FileNotFoundError(f"configuration file not found: {config_path}; run ts-team-kb init first")
+            tried = "\n".join(f"  - {item}" for item in config_candidates())
+            raise FileNotFoundError(
+                "configuration file not found; looked for:\n"
+                f"{tried}\n"
+                "how to fix:\n"
+                "  - run `ts-team-kb init --working-directory <dir> ...` first, "
+                "then run later commands from that directory\n"
+                "  - or set the environment variable TS_KB_CONFIG=<path to ts-kb.json>"
+            )
         return cls.from_file(config_path)
 
     @classmethod
