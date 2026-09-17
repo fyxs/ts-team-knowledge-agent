@@ -79,6 +79,9 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--shared-knowledge-repository-url", default=DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)
     init.add_argument("--skip-model-setup", action="store_true")
     init.add_argument("--skip-scheduled-tasks", action="store_true")
+    init.add_argument("--provider", help="模型供应商标识；填写即非交互写入配置（免安装包/脚本安装用）")
+    init.add_argument("--model", help="模型名称；填写即非交互写入配置")
+    init.add_argument("--base-url", help="模型接口地址；填写即非交互写入配置")
 
     sub.add_parser("status")
 
@@ -236,6 +239,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.scan_interval_minutes,
             args.shared_knowledge_repository_url,
         )
+        config_path = settings.working_directory / "ts-kb.json"
+        # 重跑 init 不应静默丢掉已有配置：先快照，初始化后再把 CLI 参数没管的字段合回去
+        # （模型、mineru_python、excluded_source_paths、sources_* 等），否则"重新初始化"会悄悄丢配置。
+        snapshot = {}
+        if config_path.is_file():
+            try:
+                snapshot = json.loads(config_path.read_text(encoding="utf-8-sig"))
+            except (OSError, ValueError):
+                snapshot = {}
+        cli_owned = {
+            "personal_workspace", "shared_source_directory", "working_directory",
+            "shared_knowledge_repository_directory", "scan_interval_minutes",
+            "shared_knowledge_repository_url",
+        }
         try:
             initialize_working_directory(settings)
         except (ValueError, RuntimeError) as exc:
@@ -248,8 +265,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings.shared_knowledge_repository_directory, settings.personal_workspace
         )
         print(f"member_knowledge={space['knowledge']} member_governance={space['governance']}")
-        config_path = settings.working_directory / "ts-kb.json"
-        if args.skip_model_setup or not sys.stdin.isatty():
+        model_updates = {}
+        if args.provider:
+            model_updates["model_provider"] = args.provider.strip().lower()
+        if args.model:
+            model_updates["model_name"] = args.model.strip()
+        if args.base_url:
+            model_updates["model_base_url"] = args.base_url.strip()
+        if model_updates:
+            replace(settings, **model_updates).write_file(config_path)
+            print("model configured non-interactively: "
+                  + ", ".join(sorted(model_updates)))
+        elif args.skip_model_setup or not sys.stdin.isatty():
             print("model setup skipped; run ts-team-kb config set / config set-key later")
         else:
             configure_model_interactively(settings).write_file(config_path)
@@ -257,6 +284,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("scheduled tasks skipped; run scripts/install-windows-tasks.ps1 later")
         else:
             _install_scheduled_tasks(config_path)
+        # 合并必须放在最后：写入配置的步骤不止一处，先合并会被后续写回覆盖。
+        carried = {key: value for key, value in snapshot.items()
+                   if key not in cli_owned and key not in ("model_provider", "model_name",
+                                                           "model_base_url")
+                   and not str(key).startswith("model_")}
+        if carried and config_path.is_file():
+            try:
+                fresh = json.loads(config_path.read_text(encoding="utf-8-sig"))
+            except (OSError, ValueError):
+                fresh = {}
+            merged = {**fresh, **carried}
+            if merged != fresh:
+                config_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2),
+                                       encoding="utf-8")
+                print("preserved existing settings: " + ", ".join(sorted(carried)))
         return 0
 
     settings = Settings.from_env()
