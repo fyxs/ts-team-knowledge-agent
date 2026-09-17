@@ -152,7 +152,7 @@ def main() -> int:
         if f'{rel}/{unique_title}' in used:
             unique_title = f"{safe_title}-{(node['obj_token'] or '')[:6]}"
         used.add(f'{rel}/{unique_title}')
-        md_path = out_root / f'{rel}/{unique_title}.md'
+        md_path = out_root / f'{rel}/{unique_title}/{unique_title}.md'
         asset_dir = md_path.parent / f'{unique_title}.assets'
 
         if record.get('hash') == digest and md_path.is_file():
