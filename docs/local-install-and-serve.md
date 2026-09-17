@@ -251,7 +251,10 @@ opencv 等开发期依赖一起打进包。实测同一份源码：用 `.venv` �
 ```powershell
 # 专用构建环境（放在项目内，已 gitignore；不要放 C:\tmp —— 会被清理掉）
 py -3 -m venv .venv-build
-.venv-build\Scripts\python.exe -m pip install pyinstaller
+.venv-build\Scripts\python.exe -m pip install pyinstaller `
+    fastapi "uvicorn[standard]" pydantic openpyxl pydantic-settings
+# 只装这些：MinerU 是 pyproject 的核心依赖，但 spec 已把它排除、运行期进程外调用，
+# 装了反而会把 torch/gradio/modelscope 等一起带进包（实测 zip 会从 35 MB 涨到 57 MB）。
 
 # 构建 wheel + 免安装包；--build-python 指向专用环境
 .venv-build\Scripts\python.exe scripts\build-release.py --exe `

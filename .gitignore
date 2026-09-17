@@ -36,3 +36,4 @@ graphify-out/
 pyi-work/
 codeintel/*
 !codeintel/README.md
+.venv-build/
