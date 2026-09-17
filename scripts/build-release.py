@@ -14,6 +14,7 @@ import subprocess
 import sys
 import zipfile
 import tempfile
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -34,11 +35,62 @@ def copy_tree(source: Path, target: Path) -> None:
             shutil.copy2(item, destination)
 
 
-def build(out_dir: Path) -> Path:
+FRONTEND_SOURCE_SUFFIXES = {".ts", ".tsx", ".css", ".html"}
+
+
+def _newest_file_mtime(paths) -> tuple[float, Path] | None:
+    """在一组路径里取 mtime 最大的文件（忽略不存在或非文件项）。"""
+
+    newest: tuple[float, Path] | None = None
+    for item in paths:
+        if not item.is_file():
+            continue
+        mtime = item.stat().st_mtime
+        if newest is None or mtime > newest[0]:
+            newest = (mtime, item)
+    return newest
+
+
+def ensure_frontend_fresh(frontend_dist: Path, allow_stale: bool = False) -> None:
+    """出包前校验前端产物不比源码旧（dist 不进 Git、无版本号，只能这样拦）。
+
+    踩过的坑：改完 frontend/src 忘记 `pnpm build` 就出包，包内仍是旧界面 ——
+    实测源码已改 3 个提交而 dist 停留在更早时刻，产物字节已不同却无人察觉。
+    """
+
+    frontend_dir = frontend_dist.parent
+    source_newest = _newest_file_mtime(
+        item
+        for item in (frontend_dir / "src").rglob("*")
+        if item.suffix.lower() in FRONTEND_SOURCE_SUFFIXES
+    )
+    artifact_newest = _newest_file_mtime(frontend_dist.rglob("*"))
+    if source_newest is None or artifact_newest is None:
+        return
+    if artifact_newest[0] + 1.0 >= source_newest[0]:
+        return
+
+    def stamp(value: float) -> str:
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
+
+    message = (
+        "前端产物落后于源码，拒绝出包："
+        f"dist 最新产物 {artifact_newest[1].name}（{stamp(artifact_newest[0])}）"
+        f" 早于源码最新改动 {source_newest[1].name}（{stamp(source_newest[0])}）；"
+        "请先在 frontend 目录执行 `pnpm build` 重建 frontend/dist"
+    )
+    if allow_stale:
+        print(f"warning: {message}（--allow-stale-frontend 已放行）")
+        return
+    raise SystemExit(message)
+
+
+def build(out_dir: Path, allow_stale_frontend: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     frontend_dist = PROJECT_ROOT / "frontend" / "dist"
     if not (frontend_dist / "index.html").is_file():
         raise SystemExit("前端产物缺失：请先构建 frontend/dist（发布包必须自带前端）")
+    ensure_frontend_fresh(frontend_dist, allow_stale=allow_stale_frontend)
     with tempfile.TemporaryDirectory(prefix="ts-kb-build-") as workspace:
         staging = Path(workspace) / "src"
         copy_tree(PROJECT_ROOT, staging)
@@ -189,10 +241,15 @@ def main() -> int:
     parser.add_argument("--out", default=str(PROJECT_ROOT / "dist-release"))
     parser.add_argument("--exe", action="store_true", help="同时构建免安装目录并打包 zip")
     parser.add_argument("--build-python", default=None, help="含 PyInstaller 的解释器路径")
+    parser.add_argument(
+        "--allow-stale-frontend",
+        action="store_true",
+        help="允许前端产物落后于源码时出包（默认拒绝，仅用于确知风险的场景）",
+    )
     parser.add_argument("--no-bundle-uv", action="store_true", help="不把 uv.exe 打进免安装包")
     parser.add_argument("--keep-intermediates", action="store_true", help="保留 PyInstaller 中间物（默认构建后清理）")
     args = parser.parse_args()
-    wheel = build(Path(args.out))
+    wheel = build(Path(args.out), allow_stale_frontend=args.allow_stale_frontend)
     digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
     print(f"wheel={wheel}")
     print(f"bytes={wheel.stat().st_size}")

@@ -272,8 +272,10 @@ wheel ≈ 210 KB。若明显偏大，先怀疑构建环境混入了开发依赖�
 
 注意：
 
-- `build-release.py` 需要**含 PyInstaller 的解释器**；缺了会直接提示 `pip install -e .[build]`。
-  本项目把依赖装在 `.venv`，不要另建临时构建环境（放 `C:\tmp` 之类的目录会被清理掉）。
+- `build-release.py` 需要**含 PyInstaller 的解释器**：用项目内 `.venv-build`（见上），
+  不要放 `C:\tmp` 之类的目录（会被系统清理）；缺了会提示 `pip install -e .[build]`。
+- **前端产物门禁**：出包前脚本会校验 `frontend/dist` 不早于 `frontend/src` 的最新改动，
+  改了前端就先 `pnpm build`，否则直接拒绝出包（确知风险才用 `--allow-stale-frontend`）。
 - 本机安装 PyInstaller 时 pip 可能报 `WinError 448 不受信任的装入点`（DLP 环境已知问题），
   但包实际已装好 —— 用 `python -c "import PyInstaller; print(PyInstaller.__version__)"` 复核，
   不要只看 pip 退出码。

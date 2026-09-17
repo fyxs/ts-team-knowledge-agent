@@ -122,6 +122,10 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
 
 - 改代码后至少执行：后端 `pytest`、`compileall`；前端 `typecheck` / `test` / `build`；
   `git diff --check`。
+- 后端 `pytest` 在本机必须带 `--basetemp=.cache/pytest-tmp -p no:cacheprovider`：
+  系统 Temp 下的 `pytest-of-<user>` 被 DLP 拒绝访问（WinError 5），不加会整批 ERROR，
+  看起来像「代码坏了」其实是环境问题（既有测试同样全红即可判定）。
+- 改过 `frontend/src` 必须重建 `frontend/dist`（`pnpm build`），否则界面与发布件仍是旧产物。
 - 验证失败必须如实报告，不得以部分成功替代完整成功。
 - 分支：`main` 为稳定分支；日常改动在 `dev`，验证通过后再合并。
 - 未经明确授权不执行 push；执行 push 后回读远程分支 SHA。
@@ -148,6 +152,13 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
   只看「构建成功」不算通过。
 - **构建脚本要能一键复现**：`scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>`
   产出 wheel 与免安装 zip；发布用 `scripts/publish-release.py`（默认 dry-run，上传后回读校验）。
+- **前端产物门禁**：`build-release.py` 出包前校验 `frontend/dist` 不得早于 `frontend/src` 的最新改动
+  （dist 不进 Git、没有版本号可查，只能这样拦）；确知风险时才能用 `--allow-stale-frontend` 放行。
+  实测踩过：源码改了 3 个提交而 dist 停在前一天，包内界面与源码不一致却无人察觉。
+- **构建环境口径固定为项目内 `.venv-build`**：只装 `pyinstaller` + `fastapi` + `uvicorn[standard]` +
+  `pydantic` + `openpyxl` + `pydantic-settings`，再传 `--build-python .venv-build\Scripts\python.exe`。
+  用完整开发 `.venv` 会把 numpy/openblas/PIL 等一起打进包（实测 zip 56.9 MB vs 35.4 MB）。
+
 
 ## 工具产物目录约定
 
