@@ -193,11 +193,25 @@ def _install_scheduled_tasks(config_path: Path) -> None:
         print(f"scheduled task install failed; rerun manually: {script}")
 
 
+def _configure_output() -> None:
+    """Windows 控制台默认 GBK：输出含 emoji 等不可表示字符会抛 UnicodeEncodeError 让命令整体失败。
+
+    保持控制台原编码（中文照常显示），只把无法表示的字符降级，避免 CLI 崩溃。
+    """
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def _print(payload: object) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _configure_output()
     parser = build_parser()
     args = parser.parse_args(argv)
 
