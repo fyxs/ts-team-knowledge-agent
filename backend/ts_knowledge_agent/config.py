@@ -12,6 +12,9 @@ DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL = "git@github.com:fyxs/ts-team-knowledge
 DEFAULT_SCAN_INTERVAL_MINUTES = 60
 MIN_SCAN_INTERVAL_MINUTES = 5
 
+DEFAULT_SOURCES_MAX_DISPLAY = 8
+DEFAULT_SOURCES_RELEVANCE_RATIO = 0.5
+
 
 def parse_interval_minutes(value: str | None) -> int:
     if value is None or not value.strip():
@@ -23,6 +26,32 @@ def parse_interval_minutes(value: str | None) -> int:
     if minutes < MIN_SCAN_INTERVAL_MINUTES:
         raise ValueError(f"scan interval must be at least {MIN_SCAN_INTERVAL_MINUTES} minutes")
     return minutes
+
+
+def parse_sources_max_display(value: object) -> int:
+    """展示来源条数上限；非法值直接报错，避免静默退回默认值。"""
+    if value is None or value == "":
+        return DEFAULT_SOURCES_MAX_DISPLAY
+    try:
+        count = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sources_max_display must be an integer") from exc
+    if count < 1:
+        raise ValueError("sources_max_display must be at least 1")
+    return count
+
+
+def parse_sources_relevance_ratio(value: object) -> float:
+    """证据强度阈值（相对最高强度）；低于该比例的来源不展示。"""
+    if value is None or value == "":
+        return DEFAULT_SOURCES_RELEVANCE_RATIO
+    try:
+        ratio = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("sources_relevance_ratio must be a number") from exc
+    if not 0.0 <= ratio <= 1.0:
+        raise ValueError("sources_relevance_ratio must be between 0 and 1")
+    return ratio
 
 
 @dataclass(frozen=True)
@@ -41,6 +70,8 @@ class Settings:
     model_max_tokens: int = 4096
     model_max_steps: int = 8
     excluded_source_paths: tuple[str, ...] = ()
+    sources_max_display: int = DEFAULT_SOURCES_MAX_DISPLAY
+    sources_relevance_ratio: float = DEFAULT_SOURCES_RELEVANCE_RATIO
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -75,6 +106,8 @@ class Settings:
             excluded_source_paths=tuple(
                 str(item).strip() for item in (data.get("excluded_source_paths") or []) if str(item).strip()
             ),
+            sources_max_display=parse_sources_max_display(data.get("sources_max_display")),
+            sources_relevance_ratio=parse_sources_relevance_ratio(data.get("sources_relevance_ratio")),
         )
 
     def write_file(self, path: Path) -> None:
@@ -94,8 +127,34 @@ class Settings:
             "model_max_tokens": self.model_max_tokens,
             "model_max_steps": self.model_max_steps,
             "excluded_source_paths": list(self.excluded_source_paths),
+            "sources_max_display": self.sources_max_display,
+            "sources_relevance_ratio": self.sources_relevance_ratio,
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+WORKSPACE_README_TEXT = """# 工作目录
+
+本目录是本机运行数据与共享知识仓的落点，**不是 Git 仓库**：
+除 `knowledge-base/` 之外的所有内容都不进入版本控制。
+
+| 条目 | 内容 | 处置 |
+| --- | --- | --- |
+| `ts-kb.json` | 本机运行配置（源目录、工作区、模型、扫描间隔） | 不要删除；改配置用 `ts-team-kb config` |
+| `data/` | 本机 SQLite（会话历史等） | 删除会丢失会话与状态 |
+| `logs/` | 运行日志、巡检与评测报告、使用埋点明细 | 按留存规则清理（报告保留最近 30 份，埋点长期保留） |
+| `runtime/` | 运行期锁与临时状态（如 `run.lock`，正常运行结束后会消失） | 可删，下次运行重建 |
+| `feedback/` | 本机反馈闭环记录（会导出到共享仓 `registries/`） | 不要删，属质量追溯 |
+| `secrets/` | 本机密钥（`model.key`），不进任何 Git 仓库 | 不要删；丢失需重配模型 |
+| `knowledge-base/` | 共享知识仓的本地克隆（唯一有版本控制的目录） | 不要手改，由应用同步 |
+| `run-*.cmd` / `run-*.vbs` | 启动器（由 `scripts/install-windows-tasks.ps1` 生成） | 由安装脚本重建，不要手改 |
+
+## 使用约定
+
+- 本工作目录由所有并发工作区（含 worktree）共享，不要在 worktree 内另建一套。
+- 动手前先确认服务与计划任务状态（8088 是否在监听、任务是否在跑），避免锁冲突。
+- 结构由 `ts-team-kb init` 初始化；本文件同样由 init 生成，可人工补充，但结构部分请保持与本表一致。
+"""
 
 
 def clone_knowledge_repo(settings: Settings) -> None:
@@ -122,6 +181,7 @@ def initialize_working_directory(settings: Settings) -> None:
     settings.working_directory.mkdir(parents=True, exist_ok=True)
     for name in ("data", "logs", "runtime"):
         (settings.working_directory / name).mkdir(parents=True, exist_ok=True)
+    _write_workspace_readme(settings.working_directory)
     clone_knowledge_repo(settings)
     config_path = settings.working_directory / "ts-kb.json"
     settings.write_file(config_path)
@@ -130,3 +190,12 @@ def initialize_working_directory(settings: Settings) -> None:
     if not (settings.shared_knowledge_repository_directory / ".git").is_dir():
         raise RuntimeError("shared knowledge repository was not initialized")
     ensure_member_space(settings.shared_knowledge_repository_directory, settings.personal_workspace)
+
+
+def _write_workspace_readme(working_directory: Path) -> None:
+    """首次初始化时写入工作目录说明；已存在则不覆盖（允许人工补充）。"""
+
+    readme = working_directory / "README.md"
+    if readme.is_file():
+        return
+    readme.write_text(WORKSPACE_README_TEXT, encoding="utf-8")

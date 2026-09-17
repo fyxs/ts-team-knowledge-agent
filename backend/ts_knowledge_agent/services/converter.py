@@ -49,6 +49,18 @@ def _decode_text(source: Path) -> str:
             continue
     raise UnicodeError(f"unable to decode text source as UTF-8 or GB18030: {source}")
 
+HEAVY_SUFFIXES = frozenset({".pdf", ".docx", ".doc", ".pptx", ".ppt"})
+
+
+def conversion_cost_class(source: Path) -> int:
+    """转换代价分级：0=轻量（md 直接复制 / txt 转码 / xlsx 表格），1=重活（MinerU 推理）。
+
+    队列按此排序，让新加入的 md/txt 优先入库，不被大文件堵在后面
+    （实测一轮 15~30 分钟，绝大部分时间花在 pdf/pptx 的 CPU 推理上）。
+    """
+    return 1 if source.suffix.lower() in HEAVY_SUFFIXES else 0
+
+
 def convert_file(source: Path, output: Path, converter: Converter | None = None, mineru_python: str | Path | None = None) -> ConversionResult:
     source=source.expanduser().resolve(); output=output.expanduser().resolve()
     if not source.is_file(): raise FileNotFoundError(f"source file does not exist: {source}")

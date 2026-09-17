@@ -28,5 +28,6 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $env:TS_KB_CONFIG = $configPath
 $env:PYTHONPATH = Join-Path $root 'backend'
 Set-Location $root
-& $cli inspect --per-type 6 --if-due *>> (Join-Path $logDir 'inspection-run.log')
+$log = Join-Path $logDir 'inspection-run.log'
+& cmd.exe /c ('"' + $cli + '" inspect --per-type 6 --if-due >> "' + $log + '" 2>&1')
 exit $LASTEXITCODE

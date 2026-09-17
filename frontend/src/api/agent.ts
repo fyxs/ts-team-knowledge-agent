@@ -2,9 +2,29 @@ export type AgentEvent =
   | { type: "start"; question: string }
   | { type: "tool_call"; name: string; arguments: Record<string, unknown>; step: number }
   | { type: "tool_result"; name: string; summary: string; step: number }
-  | { type: "answer"; content: string; citations: string[]; steps: number; retrieved?: boolean }
+  | { type: "answer"; content: string; citations: string[]; sources?: AnswerSource[]; steps: number; retrieved?: boolean }
   | { type: "notice"; message: string }
   | { type: "error"; error: string; step?: number };
+
+/** 一处命中：文档里的行号与该行片段。行号是全文坐标，界面据此跳到被引用的那一段。 */
+export type SourceHit = { line: number; snippet: string };
+
+/**
+ * 结构化引用来源。`citations` 仍是不带结构的路径字符串（CLI 与评测按列表消费），
+ * 界面要的标题与命中位置走这一份。
+ */
+export type AnswerSource = { path: string; title: string; hits: SourceHit[] };
+
+/** 被引用文档的正文分页。字段与 `knowledge_read` 原语同名，两边语义一致。 */
+export type KnowledgeDocument = {
+  path: string;
+  title: string;
+  content: string;
+  offset: number;
+  returned_lines: number;
+  total_lines: number;
+  truncated: boolean;
+};
 
 export type ModelConfig = {
   provider: string;
@@ -102,6 +122,27 @@ export async function streamQuestion(
       onEvent(JSON.parse(payload) as AgentEvent);
     }
   }
+}
+
+/** 读取被引用文档的正文。offset 是全文行号起点；来源阅读一次读全文，offset 只在需要跳读时用。 */
+/**
+ * 单次取回整篇正文的行数上限：来源阅读默认展示全文，与服务层 FULL_DOCUMENT_LIMIT 对齐。
+ * 触到上限时后端会回 truncated，界面据此如实说明「只显示了前 N 行」。
+ */
+export const KNOWLEDGE_FULL_DOCUMENT_LINES = 100_000;
+
+export async function fetchKnowledgeDocument(
+  path: string,
+  offset = 0,
+  limit = KNOWLEDGE_FULL_DOCUMENT_LINES,
+): Promise<KnowledgeDocument> {
+  const params = new URLSearchParams({ path, offset: String(offset), limit: String(limit) });
+  return readJson<KnowledgeDocument>(await fetch(`/api/v1/knowledge/document?${params.toString()}`));
+}
+
+/** 文档内相对资源的地址：由后端在同一套边界下读取，前端不直接拼知识仓路径。 */
+export function knowledgeAssetUrl(path: string): string {
+  return `/api/v1/knowledge/asset?${new URLSearchParams({ path }).toString()}`;
 }
 
 export async function fetchRunStatus(): Promise<RunStatus> {

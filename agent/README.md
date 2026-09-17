@@ -19,8 +19,23 @@ docs/project-structure.md      工程结构规范
 docs/frontend-stack.md         前端技术栈定稿（做前端必读）
 docs/local-install-and-serve.md 本地安装与启动
 docs/logging-v1.md             日志与运行记录
+docs/code-intelligence-log.md  代码智能工具使用记录
 docs/roadmap.md                阶段进展与后续计划
 ```
+
+## 工程基线
+
+本项目的工程结构、Agent 入口规范、工作流与工程规约来自团队工程基线工程
+（`git@github.com:fyxs/engineering-baseline.git`）。本目录的 `engineering-rules.md`
+与 `workflow.md` 是该基线在**本项目技术栈**上的落地版本：
+
+```text
+基线标准（跨项目）    engineering-baseline/standards/
+本项目落地（含栈细节） agent/engineering-rules.md · agent/workflow.md
+```
+
+新增或修改通用约定前，先确认基线是否已有规定；如有，先在基线工程修订，
+再同步到本项目，避免各项目各写一套。
 
 ## 维护原则
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  SESSION_TITLE_MAX,
   createSession as createSessionRequest,
   deleteSession as deleteSessionRequest,
   listSessions,
@@ -7,8 +8,6 @@ import {
   type SessionSummary,
 } from "../api/sessions";
 
-/** 会话标题上限；超出部分截断，避免超长问题把列表行撑开。 */
-const TITLE_MAX = 20;
 
 const PLACEHOLDER_TITLE = "新会话";
 
@@ -161,7 +160,7 @@ export function useSessions() {
         if (session.id !== id) return session;
         const renamed =
           title && session.title === PLACEHOLDER_TITLE
-            ? { title: title.length > TITLE_MAX ? `${title.slice(0, TITLE_MAX)}…` : title }
+            ? { title: title.length > SESSION_TITLE_MAX ? `${title.slice(0, SESSION_TITLE_MAX)}…` : title }
             : {};
         return { ...session, ...renamed, updatedAt: Date.now() };
       }),
@@ -172,7 +171,7 @@ export function useSessions() {
   const renameSession = useCallback(async (id: string, title: string) => {
     const trimmed = title.trim();
     if (trimmed === "") return;
-    const capped = trimmed.length > TITLE_MAX ? trimmed.slice(0, TITLE_MAX) : trimmed;
+    const capped = trimmed.length > SESSION_TITLE_MAX ? trimmed.slice(0, SESSION_TITLE_MAX) : trimmed;
     const updated = await renameSessionRequest(id, capped);
     setSessions((current) => current.map((session) => (session.id === id ? updated : session)));
   }, []);

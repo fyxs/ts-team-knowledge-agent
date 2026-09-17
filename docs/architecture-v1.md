@@ -20,6 +20,10 @@ React Web UI（Vite 构建产物，由后端托管）
         ├── 索引器        SQLite + FTS5（FTS 优先，中文子串兜底）
         ├── Git 适配器    提交、拉取、rebase、推送、冲突保护
         ├── 登记器        来源登记 / 知识条目 / 审查记录（JSONL）
+        ├── 会话存储      会话与历史消息（本机 SQLite，不进共享知识仓）
+        ├── 质量巡检      分层抽样 + 结构校验，产出巡检报告
+        ├── 检索评测      评测集自动生成 + hit@k / MRR / 引用质量
+        ├── 使用埋点      每轮问答落检索链路 trace（无关闭开关），按日汇总
         └── 调度器        计划任务唤醒 + 按间隔判断是否执行
         │
 Agent 运行时（提示词 + 技能 + 知识库工具 + 模型 provider）
@@ -51,6 +55,100 @@ error        错误
 步数上限        model_max_steps（默认 8），超出返回 max_steps_exceeded
 ```
 
+## 会话与历史
+
+```text
+存储      <工作目录>/data/sessions.sqlite3（本机；不进共享知识仓）
+表结构    sessions(id, title, created_at, updated_at)
+          messages(id, session_id, kind, payload, created_at)
+消息类型  user（提问）/ process（工具过程）/ answer（回答，含引用与步数）/ error
+标题      首条提问自动成为标题，上限 20 字；可重命名，超长按上限截断
+```
+
+接口：
+
+```text
+GET    /api/v1/sessions                  会话列表（id、title、updatedAt 毫秒时间戳）
+POST   /api/v1/sessions                  新建会话
+GET    /api/v1/sessions/{id}/messages    历史消息（含引用与工具过程，可直接回放）
+PATCH  /api/v1/sessions/{id}             重命名（空标题 400，超长截断）
+DELETE /api/v1/sessions/{id}             删除会话及其全部消息
+GET    /api/v1/sessions/search?q=&limit= 历史内容检索（返回命中片段与会话信息）
+POST   /api/v1/chat、/api/v1/chat/stream  接受 session_id，落库用户消息、工具过程与回答
+```
+
+历史全文检索：
+
+```text
+索引      messages_fts（与 messages 同库；删除会话时同步清理；索引为空时按历史消息自动补建）
+中文      索引侧与查询侧**对称**做二元片段展开——只做单侧会导致两字关键词召不回
+片段      在原始文本上以命中词为中心截取，不把索引用的二元尾巴带进摘要
+范围      用户提问与回答正文；工具过程（steps）不入索引
+```
+
+地址栏路由：
+
+```text
+参数      ?session=<会话 id>
+切换/新建   pushState（浏览器后退可在会话之间回退）
+程序性纠正  replaceState（分享链接指向已删除会话时回落到最近一条并改写地址栏）
+```
+
+## 引用来源阅读
+
+回答里的引用默认是**路径字符串**（`citations: string[]`），点开看原文需要另外两条出口：
+
+```text
+GET /api/v1/knowledge/document?path=&offset=&limit=
+    → { path, title, content, offset, returned_lines, total_lines, truncated }
+    边界：members/ 之内、必须是 .md、只读；越界或非 md 400，文件不存在 404
+
+GET /api/v1/knowledge/asset?path=
+    → 文档内相对资源（实测是文档同级 images/ 下的图片）
+    与正文同一套边界，另加后缀白名单 jpg/jpeg/png/gif/webp/svg
+```
+
+结构化引用：`/api/v1/chat`、`/api/v1/chat/stream` 的 answer 事件与会话消息 payload 在
+`citations` 之外**追加** `sources`，原字段不动（CLI 与评测按字符串数组消费）：
+
+```text
+sources: [{ path, title, hits: [{ line, snippet }] }]
+```
+
+命中行号由 `locate_sources` 在**规范化之后**的全文上定位（提问分词后逐行计分，按分数取前 3 处、
+再按行号升序）。没有检索词（模型只 `knowledge_read` 过）时 `hits` 为空，界面显示「已引用」，
+不编造命中。
+
+三处必须一起看约定，否则引用会跳到别的地方：
+
+```text
+坐标一致   命中行号按规范化后的全文算；document 接口也是「先整篇读、再按行切窗口」，
+           不能先切窗口再规范化——含多行 HTML 表格的文档行数会变
+表格        MinerU 原始 <table> 在 document 接口规范化为 GFM 管道表（实测 10/104 篇），
+           索引内容与 agent 读到的内容保持原样，两边的行为可分别回归
+图片        文档内相对图片重写为 asset 路由；作者本机路径（Typora 导出）与站外 http 图片
+           取不到也不热链，如实标成「图片不可用」或给出外部链接
+```
+
+## 治理与自检
+
+三类治理产物都落在共享知识仓 `governance/<成员>/` 下，随既有同步推送：
+
+```text
+巡检   ts-team-kb inspect       分层抽样 + 结构校验；区分阻断级与提示级
+评测   ts-team-kb evaluate      评测集自动生成，输出 hit@k / MRR / 引用质量
+埋点   logs/usage/<日期>.jsonl  每轮问答的检索链路 trace；按日汇总为 <年月>.jsonl
+```
+
+计划任务（每台成员机各跑自己的一份）：
+
+```text
+TSKnowledgeAgentScheduler    每 5 分钟敲门，应用层按 scan_interval_minutes 判断是否真跑
+TSKnowledgeAgentInspection   每天 08:30，错过唤醒补跑
+TSKnowledgeAgentEvaluation   每周一 09:00（安装时需带 -IncludeMaintenance）
+TSKnowledgeAgentWebService   用户登录时自启（幂等守护：端口已在监听则直接退出）
+```
+
 ## 成员空间
 
 成员空间（`members/<成员标识>/`）表示**写入归属与维护责任**，不是可见性隔离。进入共享知识仓的内容默认团队共享，检索默认覆盖全部成员空间。
@@ -59,12 +157,64 @@ error        错误
 
 ```text
 源目录        只读
-本机            配置、SQLite、日志、反馈、密钥、隔离产物
-Git 知识仓      知识 Markdown、图片、登记文件
+本机          配置、SQLite、运行期锁目录 runtime/、日志、反馈（状态库 / 会话库）、日志、反馈、埋点、密钥、隔离产物
+Git 知识仓     知识 Markdown、图片、登记文件、治理报告（governance/<成员>/）
 ```
 
 原始文件、SQLite、日志、本机配置和模型密钥不进入代码仓库或共享知识仓。
 
+## 状态库与索引
+
+```text
+位置      <知识仓>/data/state.sqlite3（在知识仓目录内，但不入 Git、不随同步上传）
+表        sources       源文件登记与状态（含 quality_warned 告警态）
+          conversions   转换记录（转换器标签、warning_message / error_message）
+          documents     知识条目索引（标题、字节数、图片数、来源 SHA-256）
+          documents_fts 全文索引（AND 优先 + OR 补齐 + bm25 排序）
+会话库    <工作目录>/data/sessions.sqlite3（见「会话与历史」，本机使用痕迹）
+```
+
 ## 依赖边界
 
 MinerU 运行在**独立环境**中，通过配置项 `mineru_python` 指定解释器；它不作为应用自身的依赖安装，避免把 PyTorch 等重型依赖带进普通运行环境。
+
+## 答案来源展示规则
+
+来源数量由**证据强度**决定，不由「模型搜了几次」决定（此前一次提问可能带出 10 条以上来源）。
+
+```text
+证据强度 = 3×被 knowledge_read 打开过 + 2×关键词(FTS)命中 + min(命中次数, 3)
+只展示强度 ≥ 最高强度 × sources_relevance_ratio 的来源，再按 sources_max_display 截断
+citations 与 sources 使用同一份筛选结果（前端「来源（N）」读的是 citations）
+```
+
+配置项（写入工作目录 `ts-kb.json`）：`sources_max_display`（默认 8）、`sources_relevance_ratio`（默认 0.5）。
+纯函数 `rank_sources()` 位于 `backend/ts_knowledge_agent/agent/runtime.py`，单测见 `tests/test_source_ranking.py`。
+
+## 会话与历史消息（实现说明）
+
+```text
+存储位置    <工作目录>/data/sessions.sqlite3（本机 SQLite，不进入共享知识仓）
+保存内容    用户提问、工具过程（步骤名与摘要）、回答（正文 + 检索引用 + 步数 + 是否检索）、错误
+不保存      凭据、源文件内容；回答正文只落本机
+```
+
+接口：
+
+```text
+GET  /api/v1/sessions                    会话列表（id、title、updatedAt 毫秒时间戳）
+POST /api/v1/sessions                    新建会话
+GET  /api/v1/sessions/{id}/messages      历史消息（含引用与工具过程，可直接回放）
+GET  /api/v1/sessions/search?q=         历史消息全文检索（返回会话、消息类型与命中片段）
+PATCH  /api/v1/sessions/{id}             重命名（body {"title": "..."}；超 20 字自动截断，空标题拒绝）
+DELETE /api/v1/sessions/{id}             删除会话及其全部消息
+POST /api/v1/chat、/api/v1/chat/stream   接受 session_id，落库用户消息、工具过程与回答
+```
+
+行为约定：
+
+```text
+标题        上限 20 字；首条提问自动成为标题，人工重命名走同一套规范化，前端以服务端为准
+历史加载    切换会话时按需拉取一次；已加载过的会话不再覆盖，避免抹掉在途消息
+边界        会话属于个人使用痕迹，接口只读本机库，不参与检索索引与共享仓同步
+```

@@ -10,7 +10,20 @@ from ts_knowledge_agent.schemas import KnowledgeEntry, ReviewRecord, SourceRegis
 
 
 def member_root(settings: Settings) -> Path:
+    """成员知识目录：只存放该成员共享的知识内容（检索与登记只覆盖这里）。"""
+
     return settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace
+
+
+def registry_root(settings: Settings) -> Path:
+    """登记表目录：来源、知识清单与审查导出的落点，与知识内容分离。
+
+    设计原因：登记表不是知识内容（不参与检索），放在个人知识空间里会与知识正文混杂，
+    人工审查时难以分辨。顶层语义因此分为 members（知识）/ governance（治理留痕）/
+    registries（登记表）。
+    """
+
+    return settings.shared_knowledge_repository_directory / "registries" / settings.personal_workspace
 
 
 def _write_jsonl(path: Path, records: list) -> int:
@@ -64,7 +77,7 @@ def source_registrations(settings: Settings) -> list[SourceRegistration]:
 
 
 def write_source_registry(settings: Settings) -> int:
-    return _write_jsonl(member_root(settings) / "sources.jsonl", source_registrations(settings))
+    return _write_jsonl(registry_root(settings) / "sources.jsonl", source_registrations(settings))
 
 
 def knowledge_entries(settings: Settings) -> list[KnowledgeEntry]:
@@ -97,7 +110,7 @@ def knowledge_entries(settings: Settings) -> list[KnowledgeEntry]:
 
 
 def write_knowledge_registry(settings: Settings) -> int:
-    return _write_jsonl(member_root(settings) / "knowledge.jsonl", knowledge_entries(settings))
+    return _write_jsonl(registry_root(settings) / "knowledge.jsonl", knowledge_entries(settings))
 
 
 def export_review_records(settings: Settings) -> int:
@@ -122,4 +135,4 @@ def export_review_records(settings: Settings) -> int:
                 review_status=record.review_status,
             )
         )
-    return _write_jsonl(member_root(settings) / "reviews.jsonl", records)
+    return _write_jsonl(registry_root(settings) / "reviews.jsonl", records)

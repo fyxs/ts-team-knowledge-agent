@@ -28,11 +28,19 @@ def _stage(repo: Path) -> None:
         _git(repo, "add", *paths)
 
 
+GIT_TIMEOUT_SECONDS = 180
+"""git 子命令超时上限：网络差时 fetch/push 会无限等待，卡死整轮转换（实测卡过 4.8 小时）。"""
+
+
 def _git(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise GitSyncError(f"git {' '.join(args)} 超过 {GIT_TIMEOUT_SECONDS}s 未返回（网络问题？）") from exc
     if result.returncode:
         raise GitSyncError(result.stderr.strip() or result.stdout.strip())
     return result.stdout.strip()
@@ -45,7 +53,10 @@ def prepare_repository(repo: Path) -> SyncResult:
         return SyncResult("not_initialized", message=str(repo))
     if _git(repo, "status", "--porcelain"):
         return SyncResult("blocked_dirty_worktree")
-    _git(repo, "fetch", "origin")
+    try:
+        _git(repo, "fetch", "origin")
+    except GitSyncError as exc:
+        return SyncResult("blocked_timeout", message=str(exc))
     branch = _git(repo, "branch", "--show-current") or "main"
     try:
         _git(repo, "merge", "--ff-only", f"origin/{branch}")

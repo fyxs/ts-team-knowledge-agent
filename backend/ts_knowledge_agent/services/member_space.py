@@ -12,8 +12,43 @@ from pathlib import Path
 
 MEMBERS_DIRECTORY = "members"
 GOVERNANCE_DIRECTORY = "governance"
+REGISTRIES_DIRECTORY = "registries"
 INSPECTION_SUBDIRECTORY = "inspection"
 KEEP_INSPECTION_REPORTS = 30
+
+REGISTRIES_README_TEXT = """# 登记表（registries）
+
+本目录存放各成员的来源登记、知识清单与审查导出，**不是知识内容**。
+
+- 按成员划分：`registries/<成员>/`
+- 与 `members/<成员>/`（知识正文）互不交叉；由应用在每轮转换后自动重写
+- 登记表是**派生产物**：可由知识目录与运行状态重建，不参与知识检索
+
+## 保留策略
+
+- **全量重写**：每轮转换后由应用整体重写（不是追加）；内容未变化时不写盘，
+  所以重复运行既不会产生差异也不会膨胀。
+- **规模与数据量同阶**：`sources.jsonl` 对应源文件数、`knowledge.jsonl` 对应知识条目数、
+  `reviews.jsonl` 对应本机反馈条数。
+- **应用侧不裁剪**：登记表没有保留窗口 —— 与 `governance/` 下的巡检、评测报告不同
+  （后者各保留最近 30 份）。登记表要的是"当前完整事实"，历史由 Git 保存。
+- **随知识仓同步**：与知识内容一起提交推送，团队可见，无需各自本地留存。
+
+| 文件 | 内容 |
+| --- | --- |
+| `sources.jsonl` | 来源登记：源相对路径、SHA-256、状态、转换器与版本、转换时间、产物路径 |
+| `knowledge.jsonl` | 知识清单：路径、标题、字节数、图片数、来源指纹、转换时间 |
+| `reviews.jsonl` | 审查导出：质量问题、期望值与处置状态（本机反馈的共享副本） |
+"""
+
+REGISTRIES_MEMBER_README_TEXT = """# 登记表（{member}）
+
+本目录存放 **{member}** 这个成员的登记表：`sources.jsonl`、`knowledge.jsonl`、`reviews.jsonl`。
+
+- 由应用写入（每轮转换后自动重写），不要手工编辑
+- 目录级说明见上一层 `registries/README.md`
+
+"""
 
 MEMBER_README_TEXT = """# 个人知识空间（{member}）
 
@@ -26,12 +61,22 @@ MEMBER_README_TEXT = """# 个人知识空间（{member}）
 
 GOVERNANCE_README_TEXT = """# 治理记录（governance）
 
-本目录存放该成员的检查与治理留痕，**不是知识内容**。
+本目录存放各成员的检查与治理留痕，**不是知识内容**。
 
 - 按成员划分：`governance/<成员>/`
 - 个人知识空间 `members/<成员>/` 只存放该成员共享的知识，两者不交叉
-- 内容由应用写入（`ts-team-kb inspect`），不要手工编辑
-- 巡检报告保留最近 {keep} 份，超出后自动清理最早的
+- 内容由应用写入，不要手工编辑
+
+三类产物（均由应用自动写入并随知识仓同步提交）：
+
+| 子目录 | 内容 | 产生者 |
+| --- | --- | --- |
+| `inspection/` | 知识库质量巡检报告 | `ts-team-kb inspect` |
+| `evaluation/` | 检索与引用质量评测报告 | `ts-team-kb evaluate` |
+| `usage/` | 使用埋点按日汇总（检索链路） | 随扫描轮次自动汇总 |
+
+保留策略：巡检与评测报告各保留最近 {keep} 份，超出后自动清理最早的；
+使用埋点长期保留（体积过大时压缩而非删除）。
 
 约定：
 
@@ -39,6 +84,16 @@ GOVERNANCE_README_TEXT = """# 治理记录（governance）
 - 本目录内容随知识仓同步提交，供团队成员查看运行健康度
 """
 
+
+GOVERNANCE_MEMBER_README_TEXT = """# 治理记录（{member}）
+
+本目录存放 **{member}** 这个成员的检查与治理留痕，不是知识内容。
+
+- 归属：只记录该成员本机的运行与质量数据；其他成员的记录在各自的目录下
+- 内容由应用写入（巡检 / 评测 / 埋点汇总），不要手工编辑
+- 目录级说明见上一层 `governance/README.md`
+
+"""
 
 def _member_name(member: str) -> str:
     name = (member or "").strip()
@@ -60,20 +115,40 @@ def member_governance_directory(repository_root: Path, member: str) -> Path:
 
 
 def is_knowledge_document(relative_posix: str) -> bool:
-    """判断仓库内相对路径是否为知识文档：空间说明用 README 不算知识。"""
+    """判断仓库内相对路径是否为知识文档。
 
-    if relative_posix == "members/README.md":
-        return False
+    只有 `members/<成员>/` 下的 Markdown 才算知识：空间说明用 README 不算，
+    `governance/`（治理留痕）与 `registries/`（登记表，JSONL）同样不算。
+    这里做正向限定而非逐个排除，避免以后新增顶层目录时被误纳入索引。
+    """
+
     parts = relative_posix.split("/")
-    if len(parts) == 3 and parts[0] == MEMBERS_DIRECTORY and parts[2] == "README.md":
+    if not parts or parts[0] != MEMBERS_DIRECTORY:
         return False
+    # 空间说明文件：members/README.md 与 members/<成员>/README.md
+    if len(parts) == 2 and parts[1] == "README.md":
+        return False
+    if len(parts) == 3 and parts[2] == "README.md":
+        return False
+    # 更深层的 README.md 是成员自己写的知识文档，照常入索引
     return True
 
 
-def _write_readme(directory: Path, text: str) -> None:
+def _write_readme(directory: Path, text: str, *, rewrite_legacy: str | None = None) -> None:
+    """写入目录说明。默认不覆盖已存在的文件；传 rewrite_legacy 时，
+    若现有内容包含该标记（历史错位文本），则按当前模板修正。"""
+
     readme = directory / "README.md"
-    if not readme.is_file():
-        readme.write_text(text, encoding="utf-8", newline="\n")
+    if readme.is_file():
+        if rewrite_legacy is None:
+            return
+        try:
+            current = readme.read_text(encoding="utf-8")
+        except OSError:
+            return
+        if rewrite_legacy not in current:
+            return
+    readme.write_text(text, encoding="utf-8", newline="\n")
 
 
 def ensure_member_space(repository_root: Path, member: str) -> dict[str, Path]:
@@ -84,7 +159,28 @@ def ensure_member_space(repository_root: Path, member: str) -> dict[str, Path]:
     knowledge.mkdir(parents=True, exist_ok=True)
     _write_readme(knowledge, MEMBER_README_TEXT.format(member=name))
 
+    governance_root = Path(repository_root) / GOVERNANCE_DIRECTORY
+    governance_root.mkdir(parents=True, exist_ok=True)
+    _write_readme(governance_root, GOVERNANCE_README_TEXT.format(keep=KEEP_INSPECTION_REPORTS))
+
     governance = member_governance_directory(repository_root, name)
     governance.mkdir(parents=True, exist_ok=True)
-    _write_readme(governance, GOVERNANCE_README_TEXT.format(keep=KEEP_INSPECTION_REPORTS))
-    return {"knowledge": knowledge, "governance": governance}
+    # 历史版本把目录级说明写进了成员目录，这里按标记修正为成员级说明
+    _write_readme(
+        governance,
+        GOVERNANCE_MEMBER_README_TEXT.format(member=name),
+        rewrite_legacy="按成员划分：`governance/<成员>/`",
+    )
+    registries_root = Path(repository_root) / REGISTRIES_DIRECTORY
+    registries_root.mkdir(parents=True, exist_ok=True)
+    _write_readme(registries_root, REGISTRIES_README_TEXT)
+    registries = registries_root / name
+    registries.mkdir(parents=True, exist_ok=True)
+    _write_readme(registries, REGISTRIES_MEMBER_README_TEXT.format(member=name))
+
+    return {
+        "knowledge": knowledge,
+        "governance": governance,
+        "governance_root": governance_root,
+        "registries": registries,
+    }

@@ -36,6 +36,8 @@ from ts_knowledge_agent.schemas import write_schema_files
 from ts_knowledge_agent.services.converter import convert_file
 from ts_knowledge_agent.services.knowledge_tools import knowledge_list, knowledge_read, knowledge_search, knowledge_status
 from ts_knowledge_agent.services.pipeline import run_once
+from ts_knowledge_agent.services.mineru_setup import default_mineru_env_path, setup_mineru
+from ts_knowledge_agent.services.retention import apply_prune, build_prune_plan
 from ts_knowledge_agent.services.usage import (
     TraceCollector,
     append_trace,
@@ -150,6 +152,20 @@ def build_parser() -> argparse.ArgumentParser:
     for action_name in ("start", "stop", "restart", "status"):
         service_sub.add_parser(action_name)
     inspect.add_argument("--no-publish", action="store_true", help="只写本机报告，不写入共享仓治理目录")
+    setup_mineru_parser = sub.add_parser("setup-mineru", help="制备 MinerU 转换环境")
+    setup_mineru_parser.add_argument("--path", default=None, help="环境落点（默认用户目录下的 mineru-env）")
+    setup_mineru_parser.add_argument("--python", default=None, help="复用已有的 MinerU 解释器，不新建环境")
+    setup_mineru_parser.add_argument("--requirement", default="MinerU[pipeline]", help="安装目标，默认 MinerU[pipeline]")
+    setup_mineru_parser.add_argument("--dry-run", action="store_true", help="只打印将执行的步骤")
+    setup_mineru_parser.add_argument("--no-verify", action="store_true", help="跳过导入自检")
+
+    prune = sub.add_parser("prune")
+    prune.add_argument("--keep-inspection", type=int, default=30)
+    prune.add_argument("--keep-evaluation", type=int, default=30)
+    prune.add_argument("--runs-days", type=int, default=365)
+    prune.add_argument("--log-max-mb", type=int, default=10)
+    prune.add_argument("--log-keep", type=int, default=2)
+    prune.add_argument("--apply", action="store_true", help="真正执行清理（默认只出计划）")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
 
@@ -177,11 +193,25 @@ def _install_scheduled_tasks(config_path: Path) -> None:
         print(f"scheduled task install failed; rerun manually: {script}")
 
 
+def _configure_output() -> None:
+    """Windows 控制台默认 GBK：输出含 emoji 等不可表示字符会抛 UnicodeEncodeError 让命令整体失败。
+
+    保持控制台原编码（中文照常显示），只把无法表示的字符降级，避免 CLI 崩溃。
+    """
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def _print(payload: object) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    _configure_output()
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -259,7 +289,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "convert":
         source = args.file.expanduser().resolve()
         output = args.output or settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace / source.stem / f"{source.stem}.md"
-        result = convert_file(source, output)
+        # MinerU 类型必须先配置解释器；缺配置时给出可操作提示，而不是抛底层异常
+        if settings.mineru_python is None and source.suffix.lower() in {".pdf", ".docx", ".pptx"}:
+            print("需要 MinerU 才能转换该格式：请先执行 ts-team-kb setup-mineru，"
+                  "或用 ts-team-kb config set --mineru-python <解释器>")
+            return 1
+        result = convert_file(source, output, mineru_python=settings.mineru_python)
         print(f"converted={result.output_path} bytes={result.bytes_written}")
         return 0
 
@@ -269,7 +304,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.if_due and not is_scan_due(settings):
             print(f"skipped=not_due scan_interval_minutes={settings.scan_interval_minutes}")
             return 0
-        summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
+        try:
+            summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
+        except RuntimeError as error:
+            if "already active" in str(error):
+                print(f"skipped=locked {error}")
+                return 3
+            raise
         print(
             f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} "
             f"skipped={summary.skipped} failed={summary.failed} missing={summary.missing} indexed={summary.indexed} "
@@ -457,6 +498,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(f"sampled={report.sampled} clean={report.clean} blocking={report.blocking}")
+            print(f"run_health: {report.run_health.summary}")
             for kind, count in report.issue_counts.items():
                 print(f"  {kind}: {count}")
             print(f"report={path}")
@@ -469,6 +511,53 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not args.json:
                 print(f"governance={published}")
         return 1 if report.blocking else 0
+    if args.command == "setup-mineru":
+        settings = Settings.from_env()
+        config_path = Path(os.getenv("TS_KB_CONFIG", str(settings.working_directory / "ts-kb.json")))
+        result = setup_mineru(
+            env_dir=Path(args.path).expanduser() if args.path else default_mineru_env_path(),
+            python=Path(args.python).expanduser() if args.python else None,
+            requirement=args.requirement,
+            dry_run=args.dry_run,
+            verify=not args.no_verify,
+        )
+        for step in result.steps:
+            print(step)
+        if not result.ok:
+            print(f"失败：{result.error}")
+            return 1
+        if result.python and not args.dry_run:
+            if config_path.is_file():
+                updated = replace(Settings.from_file(config_path), mineru_python=result.python)
+            else:
+                updated = replace(settings, mineru_python=result.python)
+            updated.write_file(config_path)
+            print(f"mineru_python={result.python}")
+            print(f"config={config_path}")
+        return 0
+
+    if args.command == "prune":
+        settings = Settings.from_env()
+        plan = build_prune_plan(
+            settings.working_directory,
+            keep_inspection=args.keep_inspection,
+            keep_evaluation=args.keep_evaluation,
+            runs_days=args.runs_days,
+            log_max_bytes=args.log_max_mb * 1024 * 1024,
+            log_keep=args.log_keep,
+        )
+        print(f"delete={len(plan.delete)} rotate={len(plan.rotate)} archive_months={len(plan.archive_months)}"
+              f" freed={plan.freed_bytes}B kept={plan.kept}")
+        for path in plan.delete:
+            print(f"  - {path.name}")
+        if not args.apply:
+            print("dry-run：未删除任何文件（加 --apply 才执行）")
+            return 0
+        record = apply_prune(settings.working_directory, plan, log_keep=args.log_keep)
+        print(f"applied deleted={len(record['deleted'])} rotated={len(record['rotated'])}"
+              f" frozen={len(record['frozen_protected'])} audit=logs/prune-runs.jsonl")
+        return 0
+
     if args.command == "schemas":
         for path in write_schema_files(args.output):
             print(path)

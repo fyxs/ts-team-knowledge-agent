@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -7,7 +9,11 @@ from ts_knowledge_agent.repositories.state_store import StateStore
 from ts_knowledge_agent.adapters.git_sync import sync_repository
 from ts_knowledge_agent.services.secret_scan import quarantine_document, scan_markdown_file
 from ts_knowledge_agent.services.feedback import FeedbackRecord, append_feedback, has_open_feedback
-from ts_knowledge_agent.services.converter import CONVERTER_VERSION, convert_file
+from ts_knowledge_agent.services.converter import (
+    CONVERTER_VERSION,
+    convert_file,
+    conversion_cost_class,
+)
 from ts_knowledge_agent.services.postprocess import ensure_markdown_title
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
@@ -49,6 +55,30 @@ def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=
     with RunLock(settings.working_directory):
         return _run_once_locked(settings, sync, batch_size, converter, on_batch)
 
+def log_conversion_timing(settings: Settings, source, converter_label: str,
+                          seconds: float, status: str) -> None:
+    """逐篇转换审计：路径 / 转换器 / 耗时 / 结果。
+
+    没有它就无法区分"在慢慢跑重活"与"卡住了"（实测因此误判多次，
+    一度把 15 分钟的 PDF 推理当成流水线卡死）。
+    """
+    try:
+        log_dir = settings.working_directory / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        record = {
+            "at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "source_suffix": source.absolute_path.suffix.lower(),
+            "source_name": source.absolute_path.name,
+            "converter": converter_label,
+            "seconds": round(seconds, 2),
+            "status": status,
+        }
+        with (log_dir / "conversions.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
     state=StateStore(settings.shared_knowledge_repository_directory/"data"/"state.sqlite3")
     converted=warned=skipped=failed=0; reason_counts:dict[str,int]={}
@@ -71,7 +101,10 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
             if not source.supported:
                 state.update_source_status(source.relative_path,"ignored")
             elif reason!="unchanged": pending.append((source,reason))
-        batches=plan_batches([source for source,_ in pending],batch_size)
+        batches=plan_batches(
+            sorted([source for source,_ in pending],
+                   key=lambda item: conversion_cost_class(item.absolute_path)),
+            batch_size)
         reason_by_path={source.relative_path:reason for source,reason in pending}
         for batch in batches:
             if on_batch: on_batch(batch)
@@ -79,7 +112,10 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                 output=output_path_for(settings,source.relative_path); reason=reason_by_path[source.relative_path]
                 try:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
+                    _started = time.perf_counter()
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
+                    log_conversion_timing(settings, source, result.converter,
+                                          time.perf_counter() - _started, "ok")
                     if not result.from_source:
                         ensure_markdown_title(result.output_path, source.absolute_path.stem)
                     quality = inspect_markdown_file(result.output_path)

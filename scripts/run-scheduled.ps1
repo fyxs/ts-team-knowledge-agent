@@ -28,5 +28,6 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $env:TS_KB_CONFIG = $configPath
 $env:PYTHONPATH = Join-Path $root 'backend'
 Set-Location $root
-& $cli run-once --sync --if-due --batch-size 25 *>> (Join-Path $logDir 'scheduled-run.log')
+$log = Join-Path $logDir 'scheduled-run.log'
+& cmd.exe /c ('"' + $cli + '" run-once --sync --if-due --batch-size 25 >> "' + $log + '" 2>&1')
 exit $LASTEXITCODE

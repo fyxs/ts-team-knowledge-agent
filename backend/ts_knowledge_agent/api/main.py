@@ -18,6 +18,7 @@ from ts_knowledge_agent.agent.secrets import read_api_key, secret_path
 from ts_knowledge_agent.agent.setup import mask_key
 from ts_knowledge_agent.adapters.git_sync import pull_repository, push_repository
 from ts_knowledge_agent.config import MIN_SCAN_INTERVAL_MINUTES, Settings
+from ts_knowledge_agent.services.knowledge_tools import knowledge_asset, knowledge_document
 from ts_knowledge_agent.services.scheduler import run_once_with_report
 from ts_knowledge_agent.services.sessions import (
     SessionStore,
@@ -250,6 +251,7 @@ def _persist_turn(store: SessionStore, session_id: str, question: str, collector
             {
                 "content": result.answer or "",
                 "citations": list(result.citations or []),
+                "sources": list(result.sources or []),
                 "steps": result.steps,
                 "retrieved": bool(result.retrieved),
             },
@@ -276,6 +278,7 @@ def chat(request: ChatRequest) -> dict:
     return {
         "answer": result.answer,
         "citations": result.citations,
+        "sources": result.sources,
         "steps": result.steps,
         "error": result.error,
         "retrieved": result.retrieved,
@@ -389,12 +392,57 @@ def repository_push() -> dict:
     return {"status": result.status, "commit": result.commit, "message": result.message}
 
 
+@app.get("/api/v1/knowledge/document")
+def get_knowledge_document(path: str, offset: int = 0, limit: int = 200) -> dict:
+    """读取被引用文档的正文，供「来源阅读」使用。
+
+    边界（members/ 之内、必须是 .md、只读）全部由服务层判定；
+    这里只负责把两类失败映射成 400 / 404。
+    """
+
+    settings = load_settings()
+    try:
+        document = knowledge_document(settings, path, offset=offset, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "path": document.path,
+        "title": document.title,
+        "content": document.content,
+        "offset": document.offset,
+        "returned_lines": document.returned_lines,
+        "total_lines": document.total_lines,
+        "truncated": document.truncated,
+    }
+
+
+@app.get("/api/v1/knowledge/asset")
+def get_knowledge_asset(path: str) -> FileResponse:
+    """读取文档内的相对资源（图片），与正文同一套边界，另加后缀白名单。"""
+
+    settings = load_settings()
+    try:
+        target, media_type = knowledge_asset(settings, path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(target, media_type=media_type)
+
+
 def resolve_web_dist() -> Path | None:
     """定位前端构建产物：优先环境变量，其次仓库内的 frontend/dist。"""
     configured = os.getenv("TS_KB_WEB_DIST", "").strip()
     if configured:
         candidate = Path(configured).expanduser()
         return candidate if (candidate / "index.html").is_file() else None
+    # 发布安装：前端产物随包分发（ts_knowledge_agent/web/），成员机无需 Node。
+    packaged = Path(__file__).resolve().parent.parent / "web"
+    if (packaged / "index.html").is_file():
+        return packaged
+    # 开发环境：仓库内的 frontend/dist
     default = Path(__file__).resolve().parents[3] / "frontend" / "dist"
     return default if (default / "index.html").is_file() else None
 

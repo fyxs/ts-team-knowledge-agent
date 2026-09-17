@@ -171,7 +171,13 @@ body{
    含糊；退出只要一个 Esc，主视图里接着问更顺，底部那 90px 也该还给正文。 */
 .focus-view{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;background:var(--bg);padding:var(--space-6) var(--container-gutter-desktop)}
 .focus-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--border)}
-.focus-head-main{display:flex;align-items:baseline;gap:var(--space-3);min-width:0}
+/* 居中对齐而不是基线：这里的 eyebrow 是汉字，字形铺满 em 框、没有升部降部，
+   基线对齐会让它比标题低 2px（(16-12)/2）。主头部 .chat-heading-main 的 eyebrow
+   是拉丁字母，有升部降部，那里保持基线才对——对齐方式跟着内容走。 */
+/* 压缩优先级：名字的 shrink 因子给到 100（默认 1），让溢出压力由名字先吃干净——
+   否则两侧按基准宽度等比分摊，文档名还有富余时行号跳转条就已经被压出滚动条了。
+   名字给到 0 宽才轮到右侧那一组让步。 */
+.focus-head-main{flex:1 100 auto;display:flex;align-items:center;gap:var(--space-3);min-width:0}
 .focus-head-main h1{margin:0;font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .focus-close{flex:none;width:28px;height:28px;padding:0;display:grid;place-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--fg-2);font-size:var(--text-base);line-height:1;cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
 .focus-close:hover{background:var(--accent-hover);color:var(--fg)}
@@ -218,8 +224,23 @@ body{
 /* ---------- 引用来源 ---------- */
 .citation{margin-top:var(--space-4);padding-top:var(--space-3);border-top:1px solid var(--border)}
 .citation-title{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);margin-bottom:var(--space-2)}
-.citation ul{margin:0;padding-left:var(--space-5);color:var(--fg-2);font-size:var(--text-xs);line-height:1.7}
-.citation li{word-break:break-all}
+/* 引用行：整行可点，行尾一个常显箭头。行内单行省略，完整路径只进 title 与阅读层头部——
+   实测路径中位 64 字符、最长 154，铺开就会把命中信息挤没。命中数与位置写在行上，
+   用户才知道这条值不值得点。 */
+.citation ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
+.citation li{margin:0}
+.citation-row{display:flex;align-items:baseline;gap:var(--space-3);width:100%;padding:var(--space-2) var(--space-3);border:1px solid transparent;border-radius:var(--radius-md);background:transparent;color:var(--fg-2);font:inherit;font-size:var(--text-xs);text-align:left;text-decoration:none}
+button.citation-row{cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard)}
+/* 悬浮只动背景与边框：文字色一律不动，对比度只能升不能降 */
+button.citation-row:hover{background:var(--accent-hover);border-color:var(--border-soft)}
+button.citation-row:active{background:var(--accent-active)}
+button.citation-row:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+button.citation-row:hover .citation-arrow{color:var(--fg)}
+.citation-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+.citation-meta{flex:none;font-family:var(--font-mono);color:var(--meta);white-space:nowrap}
+.citation-arrow{flex:none;color:var(--meta)}
+/* 旧会话只存了路径字符串：纯文本展示，不给一个点不开的可点态 */
+.citation-static{display:block;padding:var(--space-2) var(--space-3);font-family:var(--font-mono);color:var(--fg-2);word-break:break-all}
 
 /* ---------- 检索过程（防刷屏） ---------- */
 .process{align-self:stretch;width:100%;background:var(--surface-warm);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4)}
@@ -346,12 +367,15 @@ body{
 .settings-actions .is-ghost:hover:not(:disabled){background:var(--accent-hover);color:var(--fg);border-color:transparent}
 
 /* ---------- 滚动条：默认隐藏，悬浮时才出现 ---------- */
-/* 覆盖所有可滚动区域：消息列表、会话列表、弹窗、代码块、宽表格 */
+/* 覆盖所有可滚动区域：消息列表、会话列表、弹窗、代码块、宽表格、头部行号跳转条。
+   注意：可滚动容器进这一组，伪元素选择器进下面那一组——混进去会把 width/height
+   直接加到容器上（来源阅读层正文塌成一列就是这么来的）。 */
 .messages,
 .session-list,
 .modal-body,
 .markdown-body pre,
-.table-scroll {
+.table-scroll,
+.source-hits {
   scrollbar-width: thin;                      /* Firefox */
   scrollbar-color: transparent transparent;
 }
@@ -359,7 +383,8 @@ body{
 .session-list:hover,
 .modal-body:hover,
 .markdown-body pre:hover,
-.table-scroll:hover {
+.table-scroll:hover,
+.source-hits:hover {
   scrollbar-color: color-mix(in oklab, var(--fg) 22%, transparent) transparent;
 }
 
@@ -368,7 +393,8 @@ body{
 .session-list::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar,
 .markdown-body pre::-webkit-scrollbar,
-.table-scroll::-webkit-scrollbar {
+.table-scroll::-webkit-scrollbar,
+.source-hits::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
@@ -376,14 +402,16 @@ body{
 .session-list::-webkit-scrollbar-track,
 .modal-body::-webkit-scrollbar-track,
 .markdown-body pre::-webkit-scrollbar-track,
-.table-scroll::-webkit-scrollbar-track {
+.table-scroll::-webkit-scrollbar-track,
+.source-hits::-webkit-scrollbar-track {
   background: transparent;
 }
 .messages::-webkit-scrollbar-thumb,
 .session-list::-webkit-scrollbar-thumb,
 .modal-body::-webkit-scrollbar-thumb,
 .markdown-body pre::-webkit-scrollbar-thumb,
-.table-scroll::-webkit-scrollbar-thumb {
+.table-scroll::-webkit-scrollbar-thumb,
+.source-hits::-webkit-scrollbar-thumb {
   background-color: transparent;
   border: 3px solid transparent;               /* 内缩，视觉上更细 */
   border-radius: var(--radius-pill);
@@ -393,14 +421,16 @@ body{
 .session-list:hover::-webkit-scrollbar-thumb,
 .modal-body:hover::-webkit-scrollbar-thumb,
 .markdown-body pre:hover::-webkit-scrollbar-thumb,
-.table-scroll:hover::-webkit-scrollbar-thumb {
+.table-scroll:hover::-webkit-scrollbar-thumb,
+.source-hits:hover::-webkit-scrollbar-thumb {
   background-color: color-mix(in oklab, var(--fg) 20%, transparent);
 }
 .messages::-webkit-scrollbar-thumb:hover,
 .session-list::-webkit-scrollbar-thumb:hover,
 .modal-body::-webkit-scrollbar-thumb:hover,
 .markdown-body pre::-webkit-scrollbar-thumb:hover,
-.table-scroll::-webkit-scrollbar-thumb:hover {
+.table-scroll::-webkit-scrollbar-thumb:hover,
+.source-hits::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in oklab, var(--fg) 32%, transparent);
 }
 .messages::-webkit-scrollbar-corner,
@@ -416,3 +446,52 @@ body{
 
 /* 未检索知识库时的提示：与错误态区分，用警告色 */
 .unretrieved-note{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border:1px solid color-mix(in oklab, var(--warn) 45%, var(--border));border-radius:var(--radius-md);background:color-mix(in oklab, var(--warn) 10%, var(--surface));color:var(--fg-2);font-size:var(--text-xs)}
+
+/* ---------- 文档内图片 ---------- */
+/* 能取到的：按原始比例放进正文，不锁死两轴、也不裁切。
+   取不到的（作者本机路径、站外地址）在正文里如实标出，不留一个破图方块。 */
+.markdown-body .content-img{display:block;max-width:100%;height:auto;margin:var(--space-4) 0;border:1px solid var(--border);border-radius:var(--radius-md)}
+.markdown-body .image-missing,
+.markdown-body .image-external{display:inline-block;margin:var(--space-3) 0;padding:var(--space-2) var(--space-3);border:1px dashed var(--border-soft);border-radius:var(--radius-md);color:var(--meta);font-size:var(--text-xs);text-decoration:none}
+.markdown-body .image-external{border-style:solid;color:var(--fg)}
+.markdown-body .image-external:hover{background:var(--accent-hover)}
+
+/* ---------- 来源阅读视图 ────────────────────────────────────────────
+   点引用行进来，落在这一条命中的那一段。整屏铺满，结构就是 .focus-view 的复用：
+   同一套头部（来源 / 文档名 / 右上角 ×）、滚动区（.messages）、卡片（.message）
+   与正文排版（.markdown-body）。退出方式与集中阅读完全一致——右上角那个 ×，Esc 同义，
+   交互上不再有两套「返回」；它与集中阅读各退一层，不会一次退到底。
+   命中处数与跳转都在头部右端（.focus-head-side › .source-hit-chip / .source-hits）：
+   处数是值，行号按钮是去处，不必在两处之间对照；放在头部是因为正文会滚——
+   滚到下面还看得见「这篇命中在哪、还能跳到哪一处」。
+   卡片元信息行只留身份：完整路径 + 类型与总行数。 */
+.focus-view.source-view{z-index:90}
+/* 卡片元信息行：完整路径只在这里铺开——省略掉的那一段正是判断依据 */
+.source-doc-meta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);padding-bottom:var(--space-3);margin-bottom:var(--space-4);border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta)}
+.source-path{margin:0;word-break:break-all}
+.source-doc-kind{flex:none;white-space:nowrap}
+/* 头部右端：处数 + 行号跳转 + × 连成一组。这一组不参与压缩——文档名是唯一可以让步的
+   东西（h1 已有省略号 + title 全名），否则长文档名会把处数和跳转挤出头部。 */
+.focus-head-side{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:var(--space-3)}
+/* 命中胶囊：等宽小字，与它右边那组行号按钮同属一句「这篇命中在哪」。 */
+.source-hit-chip{flex:none;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--meta);white-space:nowrap}
+/* 命中跳转：命中可能落在已读窗口之外，所以它能重新取一段。
+   按钮多到一行放不下时这一条自己横向滚动（滚动条规则与 .messages 同组，悬浮才现），
+   而不是把文档名和 × 顶出去；min-height 32 给滚动条留出高度，没有滚动条时按钮居中对齐。 */
+.source-hits{flex:0 1 auto;min-width:0;max-width:min(46vw,420px);min-height:32px;display:flex;align-items:center;gap:var(--space-1);overflow-x:auto;overflow-y:hidden}
+.source-hit{flex:none;height:22px;padding:0 var(--space-2);border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--meta);font:inherit;font-family:var(--font-mono);font-size:var(--text-xs);cursor:pointer;transition:background var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard)}
+.source-hit:hover{background:var(--accent-hover);color:var(--fg)}
+/* 当前命中：底色再深一档，文字同步提到 --fg —— 深底浅字，对比度是升的 */
+/* 只有用户点过的命中才带 is-active：进阅读层不预选任何一处，落点只在点过行号之后产生，
+   一进来就画成按下态会被读成「被选中」。 */
+.source-hit.is-active{background:var(--accent-active);border-color:var(--border-soft);color:var(--fg)}
+.source-hit:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+/* 文档内补 h2 层级：卡片里最大的层级是 h2，不该和答案正文的 h2 一样大 */
+.source-doc .markdown-body h2{margin:var(--space-6) 0 var(--space-2);font-size:var(--text-base);font-weight:600;letter-spacing:var(--tracking-display)}
+.source-doc .markdown-body h2:first-child{margin-top:0}
+/* 命中片段：单色体系里不给颜色，给一档够重的底色——命中要被一眼看见，
+   --accent-active 是交互态用的表面色，含蓄是它的职责，于是另开一个 --mark-bg */
+.markdown-body mark{background:var(--mark-bg);color:var(--fg);border-radius:2px;padding:1px 3px}
+.source-status{margin:0;color:var(--meta);font-size:var(--text-sm)}
+.source-status:last-child{margin-top:var(--space-4)}
+.source-status-error{color:var(--danger)}

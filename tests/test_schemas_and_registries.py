@@ -9,6 +9,7 @@ from ts_knowledge_agent.services.registries import (
     export_review_records,
     knowledge_entries,
     member_root,
+    registry_root,
     write_knowledge_registry,
     write_source_registry,
 )
@@ -56,7 +57,7 @@ def test_source_registry_records_match_schema(tmp_path):
 
     write_source_registry(settings)
 
-    lines = (member_root(settings) / "sources.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    lines = (registry_root(settings) / "sources.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     record = SourceRegistration(**json.loads(lines[0]))
     assert record.member == "whm"
@@ -73,7 +74,7 @@ def test_knowledge_registry_lists_documents_with_provenance(tmp_path):
 
     write_knowledge_registry(settings)
 
-    lines = (member_root(settings) / "knowledge.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    lines = (registry_root(settings) / "knowledge.jsonl").read_text(encoding="utf-8").strip().splitlines()
     entry = KnowledgeEntry(**json.loads(lines[0]))
     assert entry.path == "members/whm/文档/文档.md"
     assert entry.title == "文档"
@@ -106,7 +107,7 @@ def test_review_export_never_leaks_local_absolute_paths(tmp_path):
 
     export_review_records(settings)
 
-    raw = (member_root(settings) / "reviews.jsonl").read_text(encoding="utf-8")
+    raw = (registry_root(settings) / "reviews.jsonl").read_text(encoding="utf-8")
     assert str(tmp_path) not in raw
     record = ReviewRecord(**json.loads(raw.strip()))
     assert record.knowledge_path == ""
@@ -118,7 +119,7 @@ def test_registry_is_stable_when_nothing_changed(tmp_path):
     _seed_conversion(settings)
 
     write_source_registry(settings)
-    path = member_root(settings) / "sources.jsonl"
+    path = registry_root(settings) / "sources.jsonl"
     first = path.read_text(encoding="utf-8")
     write_source_registry(settings)
 

@@ -169,6 +169,31 @@
         "接口"
       ],
       "note": "服务说明"
+    },
+    {
+      "id": "q015",
+      "question": "AB实验自动化闭环方案",
+      "expected_paths": [
+        "members/whm/实验室/_AB 实验自动化闭环方案/_AB 实验自动化闭环方案.md"
+      ],
+      "keywords": [
+        "AB",
+        "实验自动化闭环方案"
+      ],
+      "note": "按文档全名提问"
+    },
+    {
+      "id": "q016",
+      "question": "实验自动化闭环",
+      "expected_paths": [
+        "members/whm/实验室/_AB 实验自动化闭环方案/_AB 实验自动化闭环方案.md"
+      ],
+      "keywords": [
+        "实验",
+        "自动化",
+        "闭环"
+      ],
+      "note": "只给主题词，不含 AB"
     }
   ]
 }

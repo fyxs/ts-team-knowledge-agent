@@ -12,6 +12,7 @@ from ts_knowledge_agent.agent.secrets import read_api_key
 from ts_knowledge_agent.agent.skills import Skill, load_skills
 from ts_knowledge_agent.agent.tools import TOOL_SCHEMAS, dispatch_tool
 from ts_knowledge_agent.config import Settings
+from ts_knowledge_agent.services.knowledge_tools import locate_sources
 
 DEFAULT_MAX_STEPS = 6
 
@@ -42,6 +43,9 @@ class AgentResult:
     # 本轮是否真正检索过知识库。模型偶尔会跳过检索直接作答，
     # 这里给出可判定的事实，供调用方提示或拦截。
     retrieved: bool = False
+    # citations 的结构化补充（标题 + 命中行号与片段）。路径字符串那条链路保持不变，
+    # CLI 与评测仍按字符串列表消费；界面要的是这一份。
+    sources: list[dict] = field(default_factory=list)
 
 
 class OpenAICompatibleProvider:
@@ -151,6 +155,28 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
         {"role": "user", "content": question},
     ]
     citations: list[str] = []
+    # 每条被检索/读取过的路径的证据强度：用于决定最终展示几条来源
+    evidence: dict[str, dict] = {}
+    # 模型检索时用的查询词：结构化来源要据此在文档里定位命中行。
+    search_terms: list[str] = []
+
+    def build_sources() -> list[dict]:
+        """把本轮引用补成结构化来源（标题 + 命中行号与片段）。
+
+        只在出口算一次，且只查被引用的那几篇；模型没有检索词时不编造命中。
+        """
+
+        return [source.to_dict() for source in locate_sources(settings, displayed_paths(), search_terms)]
+
+    def displayed_paths() -> list[str]:
+        """展示用来源：按证据强度筛过、带上限；citations 与 sources 用同一份，避免数量对不上。"""
+        return rank_sources(
+            citations,
+            evidence,
+            max_display=settings.sources_max_display,
+            ratio=settings.sources_relevance_ratio,
+        )
+
     nudged = False
     emit({"type": "start", "question": question})
     for step in range(1, max_steps + 1):
@@ -159,11 +185,12 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
             emit({"type": "error", "error": reply.error, "step": step})
             return AgentResult(
                     answer="",
-                    citations=_unique(citations),
+                    citations=displayed_paths(),
                     steps=step,
                     error=reply.error,
                     transcript=transcript,
                     retrieved=bool(citations),
+                    sources=build_sources(),
                 )
         if not reply.tool_calls:
             content = (reply.content or "").strip()
@@ -172,10 +199,11 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                 emit({"type": "error", "error": f"provider returned tool markup as text ({markup})", "step": step})
                 return AgentResult(
                     answer=content,
-                    citations=_unique(citations),
+                    citations=displayed_paths(),
                     steps=step,
                     error=f"provider returned tool markup as text ({markup}); tools were not honored",
                     transcript=transcript,
+                    sources=build_sources(),
                 )
             if not citations and not nudged and step < max_steps:
                 nudged = True
@@ -187,13 +215,15 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
                     }
                 )
                 continue
-            emit({"type": "answer", "content": content, "citations": _unique(citations), "steps": step, "retrieved": bool(citations)})
+            answer_sources = build_sources()
+            emit({"type": "answer", "content": content, "citations": displayed_paths(), "sources": answer_sources, "steps": step, "retrieved": bool(citations)})
             return AgentResult(
                 answer=content,
-                citations=_unique(citations),
+                citations=displayed_paths(),
                 steps=step,
                 transcript=transcript,
                 retrieved=bool(citations),
+                sources=answer_sources,
             )
         transcript.append({
             "role": "assistant",
@@ -208,17 +238,102 @@ def run_agent(settings: Settings, question: str, provider: Provider, skills: lis
             output = dispatch_tool(settings, active_skills, call["name"], call["arguments"])
             found = _paths_from(output) if call["name"] in CITATION_TOOLS else []
             citations.extend(found)
+            if found:
+                _record_evidence(evidence, output, found)
+            if call["name"] == "knowledge_search":
+                query = _query_argument(call.get("arguments"))
+                if query:
+                    search_terms.append(query)
             emit({"type": "tool_result", "name": call["name"], "paths": found, "step": step})
             transcript.append({"role": "tool", "tool_call_id": call["id"], "content": output})
     emit({"type": "error", "error": "max_steps_exceeded", "step": max_steps})
     return AgentResult(
         answer="",
-        citations=_unique(citations),
+        citations=displayed_paths(),
         steps=max_steps,
         error="max_steps_exceeded",
         transcript=transcript,
         retrieved=bool(citations),
+        sources=build_sources(),
     )
+
+
+def _query_argument(arguments: object) -> str:
+    """取检索工具调用里的查询词；模型给的不是字符串时按「没有查询词」处理。"""
+
+    if not isinstance(arguments, dict):
+        return ""
+    value = arguments.get("query")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _evidence_from(output: str) -> list[tuple[str, str]]:
+    """从工具输出里取「路径 + 证据类型」。
+
+    read      被 knowledge_read / knowledge_document 打开过（模型主动要看这篇）
+    strong    关键词（FTS）命中
+    weak      兜底子串命中
+    """
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return []
+
+    items = payload if isinstance(payload, list) else [payload]
+    pairs: list[tuple[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path")
+        if not isinstance(path, str) or not path:
+            continue
+        matched_by = str(item.get("matched_by") or "")
+        if not matched_by:
+            pairs.append((path, "read"))
+        else:
+            pairs.append((path, "weak" if matched_by == "substring" else "strong"))
+    return pairs
+
+
+def _record_evidence(evidence: dict[str, dict], output: str, paths: list[str]) -> None:
+    """累积每条被检索/读取过的路径的证据强度。"""
+    pairs = _evidence_from(output) or [(path, "read") for path in paths]
+    for path, kind in pairs:
+        record = evidence.setdefault(path, {"hits": 0, "strong": False, "read": False})
+        record["hits"] += 1
+        if kind == "read":
+            record["read"] = True
+        elif kind == "strong":
+            record["strong"] = True
+
+
+def rank_sources(
+    paths: list[str],
+    evidence: dict[str, dict],
+    *,
+    max_display: int = 8,
+    ratio: float = 0.5,
+) -> list[str]:
+    """挑出真正要展示的来源。
+
+    强度 = 3×被打开过 + 2×关键词命中 + min(命中次数, 3)；低于最高强度 ratio 倍的不展示，
+    最后按上限截断。目的：**来源数量由证据决定，而不是由模型搜了几次决定**。
+    """
+    ordered = _unique(paths)
+    if not ordered:
+        return []
+
+    scored: list[tuple[int, int, str]] = []
+    for index, path in enumerate(ordered):
+        record = evidence.get(path) or {}
+        score = (3 if record.get("read") else 0) + (2 if record.get("strong") else 0) + min(int(record.get("hits") or 0), 3)
+        scored.append((score, index, path))
+
+    best = max(score for score, _, _ in scored)
+    threshold = best * ratio
+    ranked = sorted(scored, key=lambda item: (-item[0], item[1]))
+    kept = [path for score, _, path in ranked if score >= threshold]
+    return kept[: max(1, max_display)]
 
 
 def _paths_from(output: str) -> list[str]:

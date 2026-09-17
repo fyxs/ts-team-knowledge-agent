@@ -76,8 +76,9 @@
 
 - `main` 为稳定分支，只接受经过验证的合并。
 - 日常开发与修复在 `dev` 分支进行，不直接向 `main` 提交。
-- 并行开发时从 `dev` 派生工作分支，命名为**当前分支名 + 数字**：`dev-1`、`dev-2`……
-  完成后合回 `dev`，由 `dev` 再合入 `main`。
+- 并行开发时从 `dev` 派生工作分支，命名为**当前分支名 + 主题**：`dev-session-event`、`dev-hermes-adapter`……
+  主题用业务语义，说明这次改动做什么；不要用纯序号（`dev-1`）——序号不表达归属，
+  多 Agent 并行时无法从分支名判断改动范围。完成后合回 `dev`，由 `dev` 再合入 `main`。
 - 提交到 `dev` 前仍须通过第 3 节验证的全部检查。
 - 需要进入 `main` 时，先确认验证通过，再由用户确认合并。
 
@@ -103,15 +104,19 @@
 ### 工作区
 
 ```bash
-git worktree add ../<repo>-<n> <branch>     # 新增并行工作区
-git worktree list                            # 查看现有工作区
+git worktree add .worktrees/<branch> <branch>   # 新增并行工作区（仓库内）
+git worktree list                                # 查看现有工作区
+git worktree remove .worktrees/<branch>          # 完成后移除
 ```
+
+工作区统一放**仓库内** `.worktrees/`（已在 `.gitignore` 中忽略），不在项目目录上一级散落兄弟目录
+——那样数量会随并行增长、归属不清。不要对仓库执行 `git clean -xdf`：会连同工作区内容一起删除。
 
 只在确实需要并行时创建；单线开发仍在主工作区进行。
 
 ### 分支
 
-- 基线分支 `dev`；并行分支按**当前分支名 + 数字**命名：`dev-1`、`dev-2`……
+- 基线分支 `dev`；并行分支按**当前分支名 + 主题**命名：`dev-<主题>`（业务语义）
 - 同一个分支不能同时检出到两个 worktree，因此并行 Agent 必须使用不同分支。
 - 各并行分支完成后合回 `dev`；`dev` 验证通过后再合入 `main`。
 
@@ -131,3 +136,46 @@ git worktree list                            # 查看现有工作区
 - 不提交、不清理、不还原他人未提交的改动。
 - 需要迁移或合并他人未提交改动时，先确认对方已停止编辑。
 - 修改公共规范（`agent/`、`docs/`）前先确认没有并行改动，避免规则漂移。
+
+
+
+## 改代码前：代码智能三件套（默认动作）
+
+写项目、改项目默认使用，不是可选步骤。目的只有一个：**改前知道会影响谁，改后知道要回归什么**。
+
+```text
+Graphify   架构级全貌      graphify extract <src-root> --code-only --no-cluster --out <out-dir>
+CodeGraph  项目级影响范围  codegraph-server --graph-only --workspace <src-root> --exclude node_modules --exclude dist
+Serena     符号级定位与引用 serena.exe（按项目语言显式启用语言服务器）
+```
+
+标准动作：
+
+```text
+1. 界定范围     本次改哪些文件/符号，不要"整个项目"
+2. 划影响范围   CodeGraph 看调用方与被调用方 → 得出回归边界
+3. 定位与引用   Serena 找符号定义与全部引用 → 确认没有遗漏调用方
+4. 动手改       跨文件调用点同步处理
+5. 按边界回归   改共享组件要复测依赖它的一方，而不是只跑被改文件
+6. 收尾对照     git status --short 前后对照；清理 .serena/ 与 graphify-out/（或确认已忽略）
+```
+
+约束：
+
+```text
+- 只读优先：首次在本项目使用工具时只出报告、不改代码，确认图谱质量后再纳入日常
+- 工具是用户级安装，不进本项目依赖、不改 package.json、不把工具源码放进仓库
+- 只扫 src 与 backend，不扫 node_modules / dist / 构建产物（否则图谱被 bundle 噪声污染）
+- .serena/ 与 graphify-out/ 不入库；已加入 .gitignore
+- 使用记录：本项目内的使用结论（扫描范围、文件/节点/边规模、可用性、踩坑）写入
+  `docs/code-intelligence-log.md`，供后续改动参考；写结论与判据，不写"试过了"
+- 本文件与 `docs/` 是本仓库对所有 Agent 的规则来源。Hermes 侧另有跨项目经验沉淀机制，
+  属于 Hermes 自身能力，其他 Agent 无需也无法访问，因此项目文档不引用其路径
+- 工具输出只是证据输入，不能替代用户批准的范围边界或验收标准
+```
+## 治理数据回补与跨目录比对
+
+- **向共享仓治理目录回补历史产物，必须走项目自己的发布函数**（如 `services.governance.publish_inspection_report`），不要按文件字节复制：治理目录里是信封格式（`member` / `published_at` / `report`），命名还去掉了 `inspection-` 前缀，直接复制会同时产出**格式错误**与**重复文件**。
+- **发布函数会顺带改写 `inspection-latest.json` 指针**：重发布历史报告后指针会被回退到旧报告，必须把指针恢复为最新一份（`git checkout -- governance/<成员>/inspection-latest.json` 或重发最新一份），否则治理目录的"最新"指向错误。
+- **比对两处文件集合前先归一化命名**（前缀、扩展名、大小写）：`inspection-20260915T015245Z.json` 与 `20260915T015245Z.json` 是同一份报告，不归一化会导致差集把全部文件判为"缺失"。
+- 回补后逐份核对同源：治理信封里的 `report.generated_at` 必须与本地原始报告一致。

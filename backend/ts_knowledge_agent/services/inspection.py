@@ -23,6 +23,91 @@ INSPECTION_RUNS_FILE = "inspection-runs.jsonl"
 DEFAULT_INSPECTION_INTERVAL_MINUTES = 1440
 
 
+RUNS_FILE = "runs.jsonl"
+LOCK_RECOVERIES_FILE = "lock-recoveries.jsonl"
+RUN_HEALTH_WINDOW = 20
+CONSECUTIVE_FAILURE_BLOCKING = 3
+
+
+@dataclass(frozen=True)
+class RunHealth:
+    """运行健康：把"失败有记录但没有对外信号"变成可看见的检查项。"""
+
+    window: int = 0
+    ok: int = 0
+    failed: int = 0
+    locked: int = 0
+    consecutive_failures: int = 0
+    last_result: str = ""
+    last_error: str = ""
+    lock_recoveries: int = 0
+
+    @property
+    def blocking(self) -> int:
+        return 1 if self.consecutive_failures >= CONSECUTIVE_FAILURE_BLOCKING else 0
+
+    @property
+    def summary(self) -> str:
+        return (
+            f"最近 {self.window} 轮：ok={self.ok} locked={self.locked} failed={self.failed}；"
+            f"连续失败={self.consecutive_failures}；最近结果={self.last_result or 'unknown'}；"
+            f"锁接管={self.lock_recoveries}"
+        )
+
+
+def _tail_jsonl(path: Path, window: int) -> list[dict]:
+    if not path.is_file():
+        return []
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    records: list[dict] = []
+    for line in lines[-window:]:
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return records
+
+
+def _record_result(record: dict) -> str:
+    result = str(record.get("result") or "").strip()
+    if result:
+        return result
+    return "failed" if record.get("error") else "ok"
+
+
+def collect_run_health(working_directory: Path, window: int = RUN_HEALTH_WINDOW) -> RunHealth:
+    """读取运行记录与锁接管记录，汇总为巡检可见的运行健康。"""
+
+    logs = Path(working_directory) / "logs"
+    records = _tail_jsonl(logs / RUNS_FILE, window)
+    ok = failed = locked = 0
+    for record in records:
+        result = _record_result(record)
+        if result == "ok":
+            ok += 1
+        elif result == "locked":
+            locked += 1
+        else:
+            failed += 1
+    consecutive = 0
+    for record in reversed(records):
+        if _record_result(record) == "ok":
+            break
+        consecutive += 1
+    last = records[-1] if records else {}
+    recoveries = _tail_jsonl(logs / LOCK_RECOVERIES_FILE, window)
+    return RunHealth(
+        window=len(records),
+        ok=ok,
+        failed=failed,
+        locked=locked,
+        consecutive_failures=consecutive,
+        last_result=_record_result(last) if last else "",
+        last_error=str(last.get("error") or "")[:200],
+        lock_recoveries=len(recoveries),
+    )
+
+
 @dataclass(frozen=True)
 class DocumentCheck:
     relative_path: str
@@ -46,12 +131,13 @@ class InspectionReport:
     by_file_type: dict[str, int]
     checks: tuple[DocumentCheck, ...]
     generated_at: str = ""
+    run_health: RunHealth = RunHealth()
 
     @property
     def blocking(self) -> int:
         """会直接损害检索或阅读的缺陷数量。"""
         blocking_kinds = ("output_missing", "empty_output", "invalid_utf8", "replacement_chars", "nul_bytes", "broken_images")
-        return sum(count for kind, count in self.issue_counts.items() if kind in blocking_kinds)
+        return sum(count for kind, count in self.issue_counts.items() if kind in blocking_kinds) + self.run_health.blocking
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
@@ -182,6 +268,7 @@ def inspect_knowledge_base(settings: Settings, per_type: int = 6) -> InspectionR
         by_file_type=dict(sorted(by_type.items())),
         checks=checks,
         generated_at=datetime.now(timezone.utc).isoformat(),
+        run_health=collect_run_health(settings.working_directory),
     )
 
 

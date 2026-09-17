@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { streamQuestion, type AgentEvent } from "../api/agent";
+import type { AnswerSource } from "../api/agent";
 import { fetchSessionMessages, type StoredMessage } from "../api/sessions";
 
 export type ToolStep = {
@@ -12,7 +13,17 @@ export type ToolStep = {
 export type ChatMessage =
   | { kind: "user"; id: number; content: string }
   | { kind: "process"; id: number; steps: ToolStep[]; running: boolean; startedAt: number; durationMs?: number }
-  | { kind: "answer"; id: number; content: string; citations: string[]; steps: number; durationMs: number; retrieved: boolean }
+  | {
+      kind: "answer";
+      id: number;
+      content: string;
+      citations: string[];
+      /** 结构化引用来源：标题 + 命中行号。界面用它打开来源阅读层。 */
+      sources: AnswerSource[];
+      steps: number;
+      durationMs: number;
+      retrieved: boolean;
+    }
   | { kind: "error"; id: number; message: string };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -37,6 +48,7 @@ function toChatMessages(stored: StoredMessage[]): ChatMessage[] {
         id: -item.id,
         content: item.content ?? "",
         citations: item.citations ?? [],
+        sources: item.sources ?? [],
         steps: typeof item.steps === "number" ? item.steps : 0,
         durationMs: 0,
         retrieved: item.retrieved !== false,
@@ -174,6 +186,7 @@ export function useAgentChat(sessionId: string) {
           id: nextMessageId++,
           content: event.content,
           citations: event.citations ?? [],
+          sources: event.sources ?? [],
           steps: event.steps ?? 0,
           durationMs,
           retrieved: event.retrieved !== false,

@@ -45,7 +45,8 @@ frontend/src/styles.css       应用样式，只允许引用 token
 4. 层级靠边框与留白表达，阴影只用 --elev-* 三档，不要自定义阴影。
 5. 焦点态统一用 --focus-ring；不要另造高亮样式。
 6. 动效只用 --motion-fast / --motion-base 与 --ease-standard，不引入动画库。
-7. 深色是默认主题，浅色由 :root[data-theme="light"] 覆盖；两套都用同一组 token 名称。
+7. 主题写法：浅色是基线（写在裸 :root，design/tokens.css 即此形态），深色由 :root[data-theme="dark"] 覆盖
+   （在 frontend/src/tokens.css）；缺省深色由 frontend/index.html 引导脚本与 useTheme 写入 data-theme 得到。
 8. 新增界面结构前，先看 components.manifest.json 与 preview/，沿用既有模式而不是另起一套。
 9. 不引入聊天 UI 组件库或 CSS 框架；样式方案见 docs/frontend-stack.md。
 10. 不把第三方源码片段直接粘贴进仓库的样式或组件。

@@ -10,6 +10,7 @@ RRF_K = 60
 TITLE_WEIGHT = 8.0
 CONTENT_WEIGHT = 3.0
 
+CHANNEL_WEIGHTS = (3.0, 1.0, 2.0)  # AND / OR / PATH：路径命中是强信号，需与内容命中同台竞争
 
 def query_tokens(text: str) -> list[str]:
     """把自然语言查询切成检索词：中文字符串与英文/数字词，长度至少 2。"""
@@ -132,10 +133,11 @@ class SearchStore:
 
         scores: dict[str, float] = {}
         rows: dict[str, dict] = {}
-        for channel in channels:
+        for index, channel in enumerate(channels):
             for rank, row in enumerate(channel, 1):
                 path = row["path"]
-                scores[path] = scores.get(path, 0.0) + 1.0 / (RRF_K + rank)
+                weight = CHANNEL_WEIGHTS[index] if index < len(CHANNEL_WEIGHTS) else 1.0
+                scores[path] = scores.get(path, 0.0) + weight / (RRF_K + rank)
                 existing = rows.get(path)
                 snippet = row["snippet"] or ""
                 if existing is None or (not existing["snippet"] and snippet):
@@ -151,11 +153,40 @@ class SearchStore:
                     return index
             return len(tiers)
 
+        # 先按加权分数排序（路径/标题命中不再被固定压在最后一层），层级只用于同分打破
         ordered = sorted(
             scores.items(),
-            key=lambda item: (tier_of(item[0]), -item[1], item[0]),
+            key=lambda item: (-item[1], tier_of(item[0]), item[0]),
         )[:limit]
         return [rows[path] for path, _ in ordered]
+
+    def _fill_snippets(self, rows: list[dict], tokens: list[str]) -> None:
+        """路径通道召回的条目没有片段；补一段命中上下文，避免引用缺少词支撑（也利于阅读）。"""
+
+        if not rows or not tokens:
+            return
+        window = 40
+        for row in rows:
+            if row.get("snippet"):
+                continue
+            found = self.connection.execute(
+                "SELECT content FROM documents WHERE path = ?", (row["path"],)
+            ).fetchone()
+            content = (found["content"] if found else "") or ""
+            if not content:
+                continue
+            position = -1
+            hit = tokens[0]
+            for token in tokens:
+                index = content.lower().find(token.lower())
+                if index >= 0 and (position < 0 or index < position):
+                    position, hit = index, token
+            if position < 0:
+                row["snippet"] = content[:window * 2].strip()
+                continue
+            start = max(0, position - window)
+            end = min(len(content), position + len(hit) + window)
+            row["snippet"] = content[start:end].replace("\n", " ").strip()
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         """三路召回融合：FTS AND（精确）+ FTS OR（召回）+ 路径匹配（项目名）。"""
@@ -168,7 +199,9 @@ class SearchStore:
             self._match(fts_query(expanded_tokens(query), "or"), limit * 3),
             self._path_hits(tokens, limit * 3),
         ]
-        return self._fuse(channels, limit)
+        fused = self._fuse(channels, limit)
+        self._fill_snippets(fused, tokens)
+        return fused
 
     def search_like(self, query: str, limit: int = 10) -> list[sqlite3.Row]:
         """兼容入口：按查询词做子串匹配。"""

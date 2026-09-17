@@ -4,6 +4,10 @@
 
 本仓只放**应用代码**，不放团队知识内容（知识在 `ts-team-knowledge-base`）。
 
+![界面演示：悬浮会话行展开更多菜单、重命名、删除确认，以及答案块的全屏集中阅读](docs/images/session-demo.gif)
+
+> 演示使用示例数据，不是真实知识内容。
+
 ## 它能做什么
 
 ```text
@@ -45,60 +49,60 @@ Excel 额外按工作表拆分，大表按 5000 行分片。
 
 ## 快速开始
 
-```bash
-# 1. 安装（后端只装本包，不拉取 MinerU 等重依赖）
-git clone <应用仓地址> ts-team-knowledge-agent && cd ts-team-knowledge-agent
-.venv\Scripts\python.exe -m pip install -e . --no-deps
+两条路径，按场景选：
 
-# 2. 构建前端产物（一次性，需要 Node）
-cd frontend && pnpm install && pnpm build && cd ..
+**A. 免安装包（推荐给同事，无需源码和 Python）**
 
-# 3. 初始化：生成配置、克隆共享知识仓，并引导配置模型
-ts-team-kb init --working-directory <工作目录> --personal-workspace <成员标识> --shared-source-directory <源目录>
-
-# 4. 启动（默认只监听本机）
-ts-team-kb serve
+```text
+1. 从 Releases 下载 ts-team-kb-<版本>-win-x64.zip
+2. 解压到任意目录（例如 D:\apps\ts-team-kb）
+3. 双击目录内《使用说明.txt》按四步走：初始化工作目录 → 制备 MinerU → 启动服务 → 打开 http://<内网IP>:8088/
+（包里自带 uv.exe，没有 Python 的机器也能一步制备 MinerU）
 ```
 
-详细步骤、前置检查与常见问题见 [docs/local-install-and-serve.md](docs/local-install-and-serve.md)。
+**B. 源码（开发用）**
+
+```bash
+git clone <应用仓地址> ts-team-knowledge-agent && cd ts-team-knowledge-agent
+python -m venv .venv
+# MinerU 体积大（约 1 GB），不写进依赖安装；它由 setup-mineru 单独制备、进程外调用
+.venv\\Scripts\\python.exe -m pip install -e . --no-deps
+.venv\\Scripts\\python.exe -m pip install fastapi "uvicorn[standard]" pydantic openpyxl pydantic-settings
+cd frontend && npm ci && npm run build && cd ..     # 前端产物，一次性
+.venv\\Scripts\\ts-team-kb.exe init               # 生成工作目录（ts-kb.json / data / logs / knowledge-base）
+.venv\\Scripts\\ts-team-kb.exe serve --host 0.0.0.0 --port 8088
+```
+
+构建与发布见 `docs/local-install-and-serve.md` 的「构建与发布（维护者）」。
 
 ## 在新机器上部署（Windows）
 
-项目脚本不写死任何机器路径：`scripts/*.ps1` 用自身位置定位项目根目录，
-配置文件通过环境变量或安装器生成的 `.ts-kb-workspace` 指针文件定位。
-
-```powershell
-# 1. 克隆应用仓并创建虚拟环境
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-
-# 2. 初始化工作目录（源目录、工作目录、共享知识仓按本机情况指定）
-.\.venv\Scripts\ts-team-kb.exe init --personal-workspace <成员> `
-    --shared-source-directory <本机源目录> --working-directory <本机工作目录>
-
-# 3. 安装启动器与定时任务（可重复执行，会重新生成启动器并刷新任务）
-$env:TS_KB_CONFIG = "<本机工作目录>\ts-kb.json"
-.\scripts\install-windows-tasks.ps1
+```text
+1. 取程序    免安装包（解压即用）或 git clone 源码后按「快速开始 B」安装依赖
+2. 初始化     ts-team-kb init            → 生成工作目录：ts-kb.json / data / logs / runtime / knowledge-base
+3. 制备转换器 ts-team-kb setup-mineru    → 首次约 1 GB（离线环境可稍后再做，PDF/Word/PPT 转换需要它）
+4. 装计划任务 $env:TS_KB_CONFIG="<工作目录>\ts-kb.json"; .\scripts\install-windows-tasks.ps1
+              注册：Scheduler（周期扫描）/ Inspection（每日巡检）/ Evaluation（每周评测）/ WebService（登录时启动）
+              ★ 只写 .ts-kb-workspace 指针与任务，不写任何机器绝对路径（换机器可重复执行）
+5. 放行端口   ★ 必须做：内网访问 8088 依赖入站放行，网络类型为「公用」时尤其如此（实测踩过）
+              New-NetFirewallRule -DisplayName 'ts-team-kb 8088 (inbound)' -Direction Inbound `
+                  -Action Allow -Protocol TCP -LocalPort 8088 -Profile Any
+6. 启动服务   登录时由任务自动拉起；也可手动 `ts-team-kb service start`（或双击工作目录 run_webui.cmd）
+7. 验证       ts-team-kb service status  → 浏览器打开 http://<本机内网IP>:8088/
+              提问一次，确认答案带来源；来源数量默认最多 8 条（sources_max_display 可调）
 ```
 
-安装器会写入 `.ts-kb-workspace` 指针、生成隐藏启动器，并注册三个任务：
-`TSKnowledgeAgentScheduler`（周期扫描）、`TSKnowledgeAgentInspection`（每日巡检）、
-`TSKnowledgeAgentWebService`（登录自启 Web 服务）。任务均为登录后运行；
-启动失败会写入 `logs/runner-errors.log`，不会静默失败。
+排查入口：
 
-维护机若还需要每周评测（内容层，会调用模型），加 `-IncludeMaintenance` 一并注册：
-`scripts\install-windows-tasks.ps1 -IncludeMaintenance`。成员侧不需要，也不必加。
-
-服务控制（安装后随时可用）：
-
-```powershell
-ts-team-kb service status     # 端口 / 进程 / 健康状态
-ts-team-kb service start      # 启动（已在运行则直接返回）
-ts-team-kb service stop       # 停止
-ts-team-kb service restart    # 重启
+```text
+服务不通    先看 8088 是否在监听（Get-NetTCPConnection -LocalPort 8088 -State Listen）；
+            再看 logs\api.log（服务自身输出）与 logs\web-service.log（启动器记录）
+扫描不跑    logs\scheduled-run.log（每 5 分钟敲门；扫描间隔由 ts-kb.json 的 scan_interval_minutes 决定，下限 5 分钟）
+任务异常    logs\runs.jsonl 的 result 字段（ok / locked / failed）；任务计划程序的历史不可作为业务成败依据
+问答报错    先确认模型服务可用（settings 里的 provider/base_url），HTTP 403/空流属于服务侧问题
 ```
 
-`ts-team-kb init` 在 Windows 上默认安装计划任务；需要跳过时加 `--skip-scheduled-tasks`。
+维护者可选：`scripts\install-windows-tasks.ps1 -IncludeMaintenance` 额外注册数据层维护任务。
 
 ## 常用命令
 
@@ -115,6 +119,8 @@ ts-team-kb config show|set|set-key   查看 / 修改模型配置与密钥
 ts-team-kb schemas --output <dir>    导出知识条目 / 来源登记 / 审查记录格式
 ts-team-kb inspect [--per-type N] [--if-due]    结构巡检并发布治理记录
 ts-team-kb evaluate --mode retrieval|citations   检索与引用评测（citations 调模型）
+ts-team-kb prune            清理本机系统产物（默认 dry-run，删最旧；不动会话库与埋点）
+ts-team-kb setup-mineru    制备 MinerU 转换环境（建环境 + 安装 + 自检 + 写配置）
 ts-team-kb usage [--days N] [--suggest]          埋点指标与评测题候选
 ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状态
 ```
@@ -132,7 +138,7 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 
 ```text
 知识输出结构      <文档名>/<文档名>.md + images/（Excel 另有 sheets/）
-登记文件          members/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
+登记文件          registries/<成员>/sources.jsonl、knowledge.jsonl、reviews.jsonl
 索引与状态        SQLite 只在本机，永不进入 Git
 会话消息结构      user / process / answer / error 四类；answer 保留检索引用与工具过程
 密钥              <工作目录>/secrets/model.key，不在任何 Git 仓库内
@@ -144,13 +150,13 @@ ts-team-kb service start|stop|restart|status     本地 Web 服务启停与状�
 质量门禁    空内容 / 乱码 / 无效 UTF-8 / 过短 / 缺标题 → 不入库，可重试
 凭据门禁    命中 sk- 密钥、真实 Bearer、apiKey 字段、私钥等 → 隔离输出并阻断同步
 来源登记    每条知识记录来源文件、SHA-256、转换器版本
-审查记录    问题以结构化记录留痕（members/<成员>/reviews.jsonl）
+审查记录    问题以结构化记录留痕（registries/<成员>/reviews.jsonl）
 ```
 
 ## 运行方式
 
 - 登录自启：计划任务 `TSKnowledgeAgentWebService` 在用户登录后拉起本地 Web 服务
-  （`run-web-service-hidden.vbs` → `scripts/run-web-service.ps1`，端口已占用时直接跳过，可重复执行）。
+  （`run-web-service-hidden.vbs` → 工作目录下的 `run-api.cmd`，端口已占用时直接跳过，可重复执行）。
 - 定时任务错过后唤醒补跑：`TSKnowledgeAgentScheduler` 与 `TSKnowledgeAgentInspection` 均启用
   `StartWhenAvailable`，并各自按 `--if-due` 判断是否真正执行。
 
@@ -227,71 +233,6 @@ ts-team-kb evaluate --mode citations  # 端到端引用评测（调模型）
 改进闭环：真实提问 → 埋点 → 每周评测 → 零命中查询沉淀为评测题 → 调检索/提示词
 → 同一题集回归对比，达标才提交。评测报告写入 `governance/<成员>/evaluation/`。
 
-## 会话与历史消息
-
-```text
-存储位置    <工作目录>/data/sessions.sqlite3（本机 SQLite，不进入共享知识仓）
-保存内容    用户提问、工具过程（步骤名与摘要）、回答（正文 + 检索引用 + 步数 + 是否检索）、错误
-不保存      凭据、源文件内容；回答正文只落本机
-```
-
-接口：
-
-```text
-GET  /api/v1/sessions                    会话列表（id、title、updatedAt 毫秒时间戳）
-POST /api/v1/sessions                    新建会话
-GET  /api/v1/sessions/{id}/messages      历史消息（含引用与工具过程，可直接回放）
-PATCH  /api/v1/sessions/{id}             重命名（body {"title": "..."}；超 20 字自动截断，空标题拒绝）
-DELETE /api/v1/sessions/{id}             删除会话及其全部消息
-POST /api/v1/chat、/api/v1/chat/stream   接受 session_id，落库用户消息、工具过程与回答
-```
-
-行为约定：
-
-```text
-标题        上限 20 字；首条提问自动成为标题，人工重命名走同一套规范化，前端以服务端为准
-历史加载    切换会话时按需拉取一次；已加载过的会话不再覆盖，避免抹掉在途消息
-边界        会话属于个人使用痕迹，接口只读本机库，不参与检索索引与共享仓同步
-```
-
-## 已知环境注意事项
-
-```text
-公司 DLP（E-SafeNet）会对部分文件做透明加解密：
-  · git、node、python 读取得到明文
-  · PowerShell 的 .NET 文件 API 可能读到密文
-排查文件内容时优先用 git show 或 Python/Node 读取，不要用 PowerShell 直接读字节，
-否则会把正常文件误判为"损坏"。
-```
-
-### 典型报错
-
-```text
-PermissionError: [Errno 13] Permission denied             读取被拒
-error: unable to unlink old '<file>': Invalid argument     git 无法替换该文件
-文件开头出现 E-SafeNet / LOCK 的二进制内容                 读到的是密文而不是内容
-```
-
-### 文件被锁住时
-
-```text
-1. 关掉可能打开该文件的程序（编辑器、预览工具）——多数情况即时释放
-2. 仍锁定：注销再登录
-3. 仍锁定：重启机器
-4. 都无效：找 IT。不要自行卸载或禁用，这是公司合规管控
-```
-
-### Git 侧临时手段
-
-某个被锁文件阻塞提交时，可临时跳过它的本地变更（仓库内已提交的内容仍是正确明文）：
-
-```bash
-git update-index --skip-worktree <path>     # 临时跳过本地变更
-git update-index --no-skip-worktree <path>  # 恢复正常跟踪
-git checkout -- <path>                      # 用仓库版本覆盖本地
-```
-
-`git ls-files -v <path>` 输出以 `S` 开头即表示当前处于跳过状态。
 ## 巡检与评测的任务归属
 
 ```text
@@ -304,3 +245,14 @@ git checkout -- <path>                      # 用仓库版本覆盖本地
 ```
 
 两部分都按 `--if-due` 判定到期，并通过 `StartWhenAvailable` 在关机/休眠后补跑一次。
+
+## 发布与分发
+
+```text
+构建发布产物   python scripts/build-release.py --exe --build-python <含 PyInstaller 的解释器>（本项目已装在 .venv，可省略此参数）
+               → dist-release/<wheel>（pip/pipx 分发）与 ts-team-kb-<版本>-win-x64.zip（免安装包）
+发布到 Release python scripts/publish-release.py --tag v<版本> --prerelease --apply
+               （默认 dry-run；上传后回读资产校验大小与 state）
+产物特性       免安装包内含 Python 运行时 + 应用 + 前端产物，成员机不需要装 Python 或 Node；
+               不含 MinerU（torch 约 1.1GB，转换走独立解释器），需单独制备，见 docs/local-install-and-serve.md
+```

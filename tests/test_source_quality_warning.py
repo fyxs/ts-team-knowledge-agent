@@ -65,7 +65,7 @@ def test_source_derived_quality_issue_is_ingested_with_warning(tmp_path):
     assert records[0].adapter_issue is False
     assert records[0].review_status == "open"
 
-    reviews = repository / "members" / "whm" / "reviews.jsonl"
+    reviews = repository / "registries" / "whm" / "reviews.jsonl"
     assert reviews.is_file()
     assert "source_quality_warning" in reviews.read_text(encoding="utf-8")
 

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SESSION_TITLE_MAX } from "../api/sessions";
 import type { SessionGroup } from "../hooks/useSessions";
 
-/** 与 useSessions 的 TITLE_MAX 对齐：输入框直接挡在上限，不让用户打进去再截。 */
-const TITLE_MAX = 20;
 
 type Props = {
   groups: SessionGroup[];
@@ -125,7 +124,7 @@ export function SessionPanel({
                     ref={editRef}
                     className="session-edit-input"
                     value={draft}
-                    maxLength={TITLE_MAX}
+                    maxLength={SESSION_TITLE_MAX}
                     aria-label="会话名称"
                     onChange={(event) => setDraft(event.target.value)}
                     onBlur={() => {

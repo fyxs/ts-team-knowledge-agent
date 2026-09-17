@@ -14,7 +14,7 @@
   --fg:                        oklch(0.12 0 0);
   --fg-2:                      oklch(0.38 0 0);
   --muted:                     oklch(0.94 0 0);
-  --meta:                      oklch(0.58 0 0);
+  --meta:                      oklch(0.54 0 0);
 
   /* Border */
   --border:                    oklch(0.9 0 0);
@@ -94,7 +94,12 @@
    * --session-panel-w 历史会话列宽度。
    * --content-max-sessions 含会话列时的主区域上限：会话列展开时主区域要额外
    *               容纳一列，取它与 --content-max 的较大值，避免消息列被压窄。
-   * --dialog-w  确认框宽度：配置弹窗那档 560 是给表单的，两个按钮的二次确认用不着。 */
+   * --dialog-w  确认框宽度：配置弹窗那档 560 是给表单的，两个按钮的二次确认用不着。
+   * --mark-bg   正文里命中片段的底色。不复用 --accent-active：那个值要给按钮悬浮态用，
+   *               必须含蓄；而命中要被一眼看见，需要比卡片底色重一档。浅色 0.62 / 深色 0.5。
+   *               浅色取 0.62 而非更浅：0.72 对白卡只有 2.48:1，白底上几乎看不出被标过；
+   *               0.62 是 3.64:1，一眼可见而仍是一段安静的底色。下限 0.58（字/底 4.74:1），
+   *               再深文字对比就跌破 4.5。文字仍是 --fg（浅 5.57:1 / 深 5.50:1）。 */
   --overlay:                   oklch(0 0 0 / 0.28);
   --content-max:               var(--container-max);
   --content-max-wide:          1080px;
@@ -102,6 +107,7 @@
   --session-panel-w:           264px;
   --content-max-sessions:      1180px;
   --dialog-w:                  400px;
+  --mark-bg:                   oklch(0.62 0 0);
 
   color-scheme: light;
 }
@@ -119,7 +125,7 @@
   --fg:                        oklch(0.97 0 0);
   --fg-2:                      oklch(0.74 0 0);
   --muted:                     oklch(0.27 0 0);
-  --meta:                      oklch(0.6 0 0);
+  --meta:                      oklch(0.62 0 0);
 
   /* Border */
   --border:                    oklch(0.28 0 0);
@@ -140,6 +146,7 @@
 
   /* 应用扩展 */
   --overlay:                   oklch(0 0 0 / 0.6);
+  --mark-bg:                   oklch(0.5 0 0);
 
   color-scheme: dark;
 }

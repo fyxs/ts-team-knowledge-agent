@@ -28,5 +28,6 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $env:TS_KB_CONFIG = $configPath
 $env:PYTHONPATH = Join-Path $root 'backend'
 Set-Location $root
-& $cli evaluate --mode both --publish --if-due --interval-minutes 10080 *>> (Join-Path $logDir 'evaluation-run.log')
+$log = Join-Path $logDir 'evaluation-run.log'
+& cmd.exe /c ('"' + $cli + '" evaluate --mode both --publish --if-due --interval-minutes 10080 >> "' + $log + '" 2>&1')
 exit $LASTEXITCODE

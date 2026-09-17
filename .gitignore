@@ -1,3 +1,6 @@
+# 并行工作区（git worktree）
+.worktrees/
+
 __pycache__/
 *.py[cod]
 .venv/
@@ -23,3 +26,14 @@ frontend/tsconfig.tsbuildinfo
 .pytest_cache/
 # machine-local pointer written by install-windows-tasks.ps1
 .ts-kb-workspace
+# 发布构建产物（由 scripts/build-release.py 生成）
+dist-release/
+
+# 代码智能工具产物（索引缓存与图谱报告，不入库）
+.serena/
+graphify-out/
+.codegraph/
+pyi-work/
+codeintel/*
+!codeintel/README.md
+.venv-build/
