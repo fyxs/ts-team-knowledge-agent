@@ -49,60 +49,60 @@ Excel 额外按工作表拆分，大表按 5000 行分片。
 
 ## 快速开始
 
-```bash
-# 1. 安装（后端只装本包，不拉取 MinerU 等重依赖）
-git clone <应用仓地址> ts-team-knowledge-agent && cd ts-team-knowledge-agent
-.venv\Scripts\python.exe -m pip install -e . --no-deps
+两条路径，按场景选：
 
-# 2. 构建前端产物（一次性，需要 Node）
-cd frontend && pnpm install && pnpm build && cd ..
+**A. 免安装包（推荐给同事，无需源码和 Python）**
 
-# 3. 初始化：生成配置、克隆共享知识仓，并引导配置模型
-ts-team-kb init --working-directory <工作目录> --personal-workspace <成员标识> --shared-source-directory <源目录>
-
-# 4. 启动（默认只监听本机）
-ts-team-kb serve
+```text
+1. 从 Releases 下载 ts-team-kb-<版本>-win-x64.zip
+2. 解压到任意目录（例如 D:\apps\ts-team-kb）
+3. 双击目录内《使用说明.txt》按四步走：初始化工作目录 → 制备 MinerU → 启动服务 → 打开 http://<内网IP>:8088/
+（包里自带 uv.exe，没有 Python 的机器也能一步制备 MinerU）
 ```
 
-详细步骤、前置检查与常见问题见 [docs/local-install-and-serve.md](docs/local-install-and-serve.md)。
+**B. 源码（开发用）**
+
+```bash
+git clone <应用仓地址> ts-team-knowledge-agent && cd ts-team-knowledge-agent
+python -m venv .venv
+# MinerU 体积大（约 1 GB），不写进依赖安装；它由 setup-mineru 单独制备、进程外调用
+.venv\\Scripts\\python.exe -m pip install -e . --no-deps
+.venv\\Scripts\\python.exe -m pip install fastapi "uvicorn[standard]" pydantic openpyxl pydantic-settings
+cd frontend && npm ci && npm run build && cd ..     # 前端产物，一次性
+.venv\\Scripts\\ts-team-kb.exe init               # 生成工作目录（ts-kb.json / data / logs / knowledge-base）
+.venv\\Scripts\\ts-team-kb.exe serve --host 0.0.0.0 --port 8088
+```
+
+构建与发布见 `docs/local-install-and-serve.md` 的「构建与发布（维护者）」。
 
 ## 在新机器上部署（Windows）
 
-项目脚本不写死任何机器路径：`scripts/*.ps1` 用自身位置定位项目根目录，
-配置文件通过环境变量或安装器生成的 `.ts-kb-workspace` 指针文件定位。
-
-```powershell
-# 1. 克隆应用仓并创建虚拟环境
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-
-# 2. 初始化工作目录（源目录、工作目录、共享知识仓按本机情况指定）
-.\.venv\Scripts\ts-team-kb.exe init --personal-workspace <成员> `
-    --shared-source-directory <本机源目录> --working-directory <本机工作目录>
-
-# 3. 安装启动器与定时任务（可重复执行，会重新生成启动器并刷新任务）
-$env:TS_KB_CONFIG = "<本机工作目录>\ts-kb.json"
-.\scripts\install-windows-tasks.ps1
+```text
+1. 取程序    免安装包（解压即用）或 git clone 源码后按「快速开始 B」安装依赖
+2. 初始化     ts-team-kb init            → 生成工作目录：ts-kb.json / data / logs / runtime / knowledge-base
+3. 制备转换器 ts-team-kb setup-mineru    → 首次约 1 GB（离线环境可稍后再做，PDF/Word/PPT 转换需要它）
+4. 装计划任务 $env:TS_KB_CONFIG="<工作目录>\ts-kb.json"; .\scripts\install-windows-tasks.ps1
+              注册：Scheduler（周期扫描）/ Inspection（每日巡检）/ Evaluation（每周评测）/ WebService（登录时启动）
+              ★ 只写 .ts-kb-workspace 指针与任务，不写任何机器绝对路径（换机器可重复执行）
+5. 放行端口   ★ 必须做：内网访问 8088 依赖入站放行，网络类型为「公用」时尤其如此（实测踩过）
+              New-NetFirewallRule -DisplayName 'ts-team-kb 8088 (inbound)' -Direction Inbound `
+                  -Action Allow -Protocol TCP -LocalPort 8088 -Profile Any
+6. 启动服务   登录时由任务自动拉起；也可手动 `ts-team-kb service start`（或双击工作目录 run_webui.cmd）
+7. 验证       ts-team-kb service status  → 浏览器打开 http://<本机内网IP>:8088/
+              提问一次，确认答案带来源；来源数量默认最多 8 条（sources_max_display 可调）
 ```
 
-安装器会写入 `.ts-kb-workspace` 指针、生成隐藏启动器，并注册三个任务：
-`TSKnowledgeAgentScheduler`（周期扫描）、`TSKnowledgeAgentInspection`（每日巡检）、
-`TSKnowledgeAgentWebService`（登录自启 Web 服务）。任务均为登录后运行；
-启动失败会写入 `logs/runner-errors.log`，不会静默失败。
+排查入口：
 
-维护机若还需要每周评测（内容层，会调用模型），加 `-IncludeMaintenance` 一并注册：
-`scripts\install-windows-tasks.ps1 -IncludeMaintenance`。成员侧不需要，也不必加。
-
-服务控制（安装后随时可用）：
-
-```powershell
-ts-team-kb service status     # 端口 / 进程 / 健康状态
-ts-team-kb service start      # 启动（已在运行则直接返回）
-ts-team-kb service stop       # 停止
-ts-team-kb service restart    # 重启
+```text
+服务不通    先看 8088 是否在监听（Get-NetTCPConnection -LocalPort 8088 -State Listen）；
+            再看 logs\api.log（服务自身输出）与 logs\web-service.log（启动器记录）
+扫描不跑    logs\scheduled-run.log（每 5 分钟敲门；扫描间隔由 ts-kb.json 的 scan_interval_minutes 决定，下限 5 分钟）
+任务异常    logs\runs.jsonl 的 result 字段（ok / locked / failed）；任务计划程序的历史不可作为业务成败依据
+问答报错    先确认模型服务可用（settings 里的 provider/base_url），HTTP 403/空流属于服务侧问题
 ```
 
-`ts-team-kb init` 在 Windows 上默认安装计划任务；需要跳过时加 `--skip-scheduled-tasks`。
+维护者可选：`scripts\install-windows-tasks.ps1 -IncludeMaintenance` 额外注册数据层维护任务。
 
 ## 常用命令
 
