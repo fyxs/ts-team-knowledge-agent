@@ -245,3 +245,25 @@ git checkout -- <path>                      # 用仓库版本覆盖本地
 ```
 
 `git ls-files -v <path>` 输出以 `S` 开头即表示当前处于跳过状态。
+
+## Windows 控制台编码：输出必须能容忍不可表示字符（2026-09-17 实测）
+
+同一天踩了两次，都是"代码逻辑正确、跑起来直接崩"：
+
+```text
+① 脚本侧：看门狗脚本打印 ⚠️ 前缀 → UnicodeEncodeError: 'gbk' codec can't encode '\u26a0'
+② CLI 侧：包内 exe 跑 search → UnicodeEncodeError: 'gbk' codec can't encode '\u274c'
+   （--help / status 正常，因为它们不打印该字符 → 极易漏测）
+```
+
+规则：
+
+```text
+1. 面向 Windows 控制台的输出（CLI、计划任务脚本、管道子进程）先把错误策略降级：
+     sys.stdout.reconfigure(errors="replace")   # 保持编码不动
+   不要把编码改成 UTF-8 —— 那会让 GBK 控制台里的中文变乱码。
+2. 少用 emoji 做状态标记；用 [!] / [ok] 这类 ASCII 标记，跨编码都安全。
+3. 验证要覆盖"会打印特殊字符的那条路径"：只测 --help 会漏掉真正的崩溃点。
+4. 子进程互相读取输出时按本机编码解码（GBK 优先），否则中文比对必然失败 ——
+   这类"看似功能坏、其实是自己解码错"的假故障，今天也踩过一次。
+```
