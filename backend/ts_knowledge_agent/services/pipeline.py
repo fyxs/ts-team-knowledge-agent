@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -28,8 +30,14 @@ class ProcessingBatch:
     files: tuple[SourceFile, ...]
 
 def plan_batches(files: list[SourceFile], batch_size: int) -> list[ProcessingBatch]:
+    """按车道（轻量优先）与路径分批，让新加入的 md/txt 不被 MinerU 重活堵在队尾。
+
+    排序键只在**这里**收敛：调用方不要再排一遍，否则会被本函数覆盖
+    （实测出现过「外层按代价排序、内层又按路径重排」导致轻量优先完全失效）。
+    """
+
     if batch_size < 1: raise ValueError("batch size must be at least 1")
-    ordered=sorted(files,key=lambda item:item.relative_path.lower())
+    ordered=sorted(files,key=lambda item:(conversion_cost_class(item.absolute_path), item.relative_path.lower()))
     return [ProcessingBatch(i,tuple(ordered[start:start+batch_size])) for i,start in enumerate(range(0,len(ordered),batch_size),1)]
 
 @dataclass(frozen=True)
@@ -46,14 +54,32 @@ class RunSummary:
     sync_status:str="disabled"
     reason_counts: dict[str,int] = field(default_factory=dict)
 
+LANE_ALL = "all"
+LANE_LIGHT = "light"
+LANE_HEAVY = "heavy"
+LANE_CHOICES = (LANE_ALL, LANE_LIGHT, LANE_HEAVY)
+# 轻量车道持独立锁：md/txt 复制不该被 MinerU 重活的锁挡在门外（也不能嵌在它里面）
+LANE_LOCK_NAMES = {LANE_ALL: "run.lock", LANE_LIGHT: "light.lock", LANE_HEAVY: "run.lock"}
+
+
+def lane_of(source: SourceFile) -> str:
+    """来源所属车道：轻量（md/txt/xlsx）或重活（MinerU 转换）。"""
+
+    return LANE_LIGHT if conversion_cost_class(source.absolute_path) == 0 else LANE_HEAVY
+
+
 def output_path_for(settings: Settings, relative_path: str) -> Path:
     relative=Path(relative_path)
     document_dir=settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace / relative.parent / relative.stem
     return document_dir / f"{relative.stem}.md"
 
-def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
-    with RunLock(settings.working_directory):
-        return _run_once_locked(settings, sync, batch_size, converter, on_batch)
+def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None, lane: str=LANE_ALL)->RunSummary:
+    """跑一轮。lane=light/heavy 时只处理该车道的来源，并使用该车道自己的锁。"""
+
+    if lane not in LANE_LOCK_NAMES:
+        raise ValueError("unknown lane: " + lane + "（可选 " + " / ".join(LANE_CHOICES) + "）")
+    with RunLock(settings.working_directory, name=LANE_LOCK_NAMES[lane]):
+        return _run_once_locked(settings, sync, batch_size, converter, on_batch, lane=lane)
 
 def log_conversion_timing(settings: Settings, source, converter_label: str,
                           seconds: float, status: str) -> None:
@@ -79,7 +105,7 @@ def log_conversion_timing(settings: Settings, source, converter_label: str,
         pass
 
 
-def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None)->RunSummary:
+def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None, lane: str=LANE_ALL)->RunSummary:
     state=StateStore(settings.shared_knowledge_repository_directory/"data"/"state.sqlite3")
     converted=warned=skipped=failed=0; reason_counts:dict[str,int]={}
     try:
@@ -100,11 +126,13 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
             reason_counts[reason]=reason_counts.get(reason,0)+1
             if not source.supported:
                 state.update_source_status(source.relative_path,"ignored")
-            elif reason!="unchanged": pending.append((source,reason))
-        batches=plan_batches(
-            sorted([source for source,_ in pending],
-                   key=lambda item: conversion_cost_class(item.absolute_path)),
-            batch_size)
+            elif reason!="unchanged":
+                if lane != LANE_ALL and lane_of(source) != lane:
+                    # 另一条车道的活：不改状态、不计失败，留给它自己处理
+                    reason_counts["deferred_to_other_lane"]=reason_counts.get("deferred_to_other_lane",0)+1
+                    continue
+                pending.append((source,reason))
+        batches=plan_batches([source for source,_ in pending], batch_size)
         reason_by_path={source.relative_path:reason for source,reason in pending}
         for batch in batches:
             if on_batch: on_batch(batch)

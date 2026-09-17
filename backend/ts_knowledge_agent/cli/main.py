@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--sync", action="store_true")
     run.add_argument("--batch-size", type=int, default=25)
     run.add_argument("--if-due", action="store_true", help="只有距上次运行达到扫描间隔时才执行本轮")
+    run.add_argument("--lane", choices=("all", "light", "heavy"), default="all",
+                     help="车道：all=全类型（默认）；light=只做 md/txt/xlsx（独立 light.lock）；heavy=只做 MinerU 重活（run.lock）")
 
     sub.add_parser("schedule")
 
@@ -358,7 +360,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"skipped=not_due scan_interval_minutes={settings.scan_interval_minutes}")
             return 0
         try:
-            summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size)
+            summary = run_once_with_report(settings, sync=args.sync, batch_size=args.batch_size, lane=args.lane)
         except RuntimeError as error:
             if "already active" in str(error):
                 print(f"skipped=locked {error}")

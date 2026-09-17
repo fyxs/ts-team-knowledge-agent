@@ -20,12 +20,13 @@ def _write_run_report(settings: Settings, summary: RunSummary, started: str, end
     with path.open("a",encoding="utf-8") as f: f.write(json.dumps(record,ensure_ascii=False)+"\n")
     return path
 
-def run_once_with_report(settings: Settings, *, sync: bool = False, batch_size: int = 25) -> RunSummary:
+def run_once_with_report(settings: Settings, *, sync: bool = False, batch_size: int = 25,
+                          lane: str = "all") -> RunSummary:
     started_dt = datetime.now(timezone.utc)
     started = started_dt.isoformat()
     started_perf = time.perf_counter()
     try:
-        summary = run_once(settings, sync=sync, batch_size=batch_size)
+        summary = run_once(settings, sync=sync, batch_size=batch_size, lane=lane)
         error = None
     except Exception as exc:
         ended = datetime.now(timezone.utc).isoformat()

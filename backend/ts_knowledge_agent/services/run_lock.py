@@ -1,4 +1,6 @@
-"""转换运行锁：同一工作目录同时只允许一次转换运行。
+"""转换运行锁：同一工作目录同时只允许一次转换运行（同名锁之间互斥）。
+
+不同 name 的锁彼此独立：轻量车道（md/txt/xlsx）用 light.lock，不与 MinerU 重活互相阻塞。
 
 锁文件带 pid、主机名与创建时间。接管条件（按优先级）：
 
@@ -39,9 +41,12 @@ def _pid_alive(pid: int) -> bool:
 
 
 class RunLock:
-    def __init__(self, working_directory: Path, stale_seconds: int = 7200) -> None:
+    def __init__(self, working_directory: Path, stale_seconds: int = 7200,
+                 name: str = "run.lock") -> None:
+        """name 允许一个工作目录存在多把互不阻塞的锁（如轻量车道 light.lock）。"""
+
         self.working_directory = Path(working_directory)
-        self.path = self.working_directory / "runtime" / "run.lock"
+        self.path = self.working_directory / "runtime" / name
         self.recovery_log = self.working_directory / "logs" / "lock-recoveries.jsonl"
         self.stale_seconds = stale_seconds
 
