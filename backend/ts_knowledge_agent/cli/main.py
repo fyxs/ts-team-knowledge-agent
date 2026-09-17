@@ -255,6 +255,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         }
         try:
             initialize_working_directory(settings)
+        except UnicodeDecodeError as exc:
+            # UnicodeDecodeError 是 ValueError 的子类，之前被下面的分支当成"业务校验失败"，
+            # 于是打印 usage 并 exit 2——而那时目录和配置其实已经写好了，用户只会以为安装失败。
+            # 这里按"文件编码问题"单独处理：能走到这一步说明失败点在读某个文件，
+            # 不是配置错误；工作目录与 ts-kb.json 已经可用，就按成功继续并给出可执行的修复提示。
+            print("warning: 读取文件时按 UTF-8 解码失败，该文件很可能不是 UTF-8 编码："
+                  f"{exc}")
+            print("  → 这一步已跳过；工作目录与 ts-kb.json 不受影响，安装可继续")
+            print("  → 修复：把该文件另存为 UTF-8（或反馈文件路径，让其按本机编码读取）")
         except (ValueError, RuntimeError) as exc:
             parser.error(str(exc))
         print(
