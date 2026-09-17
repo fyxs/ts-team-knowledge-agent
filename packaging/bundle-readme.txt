@@ -55,3 +55,32 @@ TS 团队知识 Agent · 免安装版使用说明
 【安全说明】
   知识源目录是只读的：程序不会移动、覆盖、重命名或删除你的原始文件。
   API Key 保存在 <工作目录>\secrets\model.key，不进入任何仓库。
+
+【非交互安装（脚本 / 批量部署）】
+  一次装完，不需要在 init 时回答交互问题：
+    ts-team-kb.exe init --working-directory D:\2Work\Knowledge\kb-shared-workspace ^
+                        --personal-workspace <成员标识> ^
+                        --shared-source-directory D:\2Work\Knowledge\TS-Share ^
+                        --provider ts_proxy --model <模型名> --base-url <接口地址>
+  密钥单独写（不要放进命令行，会进历史记录和日志）：
+    ts-team-kb.exe config set-key --from-file <密钥文件>
+
+【让服务在后台静默运行（不要留黑窗）】
+  推荐用 service install 注册计划任务，由系统隐藏启动：
+    ts-team-kb.exe service install
+  不要把 `ts-team-kb.exe serve` 的窗口长期挂着；前台启动只用于临时排查。
+
+【配置文件位置（报"找不到配置"时看这里）】
+  命令按以下顺序查找 ts-kb.json：
+    1) 环境变量 TS_KB_CONFIG 指定的路径
+    2) 当前目录下的 ts-kb.json
+    3) 当前目录下的 .local\ts-kb.json
+    4) 环境变量 TS_KB_WORKING_DIRECTORY 目录下的 ts-kb.json
+  所以要么 cd 到工作目录再执行命令，要么显式设置 TS_KB_CONFIG。
+  重跑 init 不会丢配置：只更新 working-directory / personal-workspace /
+  shared-source-directory / scan-interval-minutes / shared-knowledge-repository-url，
+  模型设置、mineru_python、excluded_source_paths、sources_* 等原样保留。
+
+【复用已有转换环境，不重复下载约 1.1 GB】
+    ts-team-kb.exe config set --mineru-python <已有 MinerU 的 python.exe 路径>
+  安装时也可以：ts-team-kb.exe setup-mineru --python <同一路径>
