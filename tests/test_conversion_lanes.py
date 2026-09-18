@@ -153,3 +153,77 @@ def test_failed_conversion_is_audited(tmp_path):
     assert records and records[-1]["status"] == "failed:TimeoutError"
     assert records[-1]["source_name"] == "boom.pdf"
     assert "seconds" in records[-1] and records[-1]["seconds"] >= 0
+
+def test_queue_rank_defers_known_slow_documents() -> None:
+    """已知很慢的大文档必须排在中小文档之后 —— 否则整轮被它堵死。"""
+
+    from ts_knowledge_agent.services.pipeline import queue_rank
+    from ts_knowledge_agent.services.scanner import SourceFile
+    from pathlib import Path as _Path
+
+    def src(name: str) -> SourceFile:
+        return SourceFile(name, _Path(name), 1, 1, name)
+
+    fast, slow, light = src("a.pdf"), src("big.pdf"), src("note.md")
+    estimates = {"big.pdf": 3600.0}
+
+    ranks = {s.relative_path: queue_rank(s, estimates, 600, 20)[0] for s in (fast, slow, light)}
+    assert ranks["note.md"] == 0, "轻量文档最前"
+    assert ranks["a.pdf"] == 1, "普通重活居中"
+    assert ranks["big.pdf"] == 3, "实测慢文档排最后"
+
+    ordered = sorted((light, slow, fast), key=lambda s: queue_rank(s, estimates, 600, 20))
+    assert [s.relative_path for s in ordered] == ["note.md", "a.pdf", "big.pdf"]
+
+
+def test_queue_rank_defers_oversized_first_time_documents(tmp_path) -> None:
+    """没有历史、但体积超大的重活文档同样后置（阈值可关）。"""
+
+    from ts_knowledge_agent.services.pipeline import queue_rank
+    from ts_knowledge_agent.services.scanner import SourceFile
+
+    big = tmp_path / "huge.pdf"
+    big.write_bytes(b"x" * (25 * 1024 * 1024))
+    small = tmp_path / "small.pdf"
+    small.write_bytes(b"x" * 1024)
+
+    big_src = SourceFile("huge.pdf", big, 1, 1, "huge.pdf")
+    small_src = SourceFile("small.pdf", small, 1, 1, "small.pdf")
+
+    assert queue_rank(big_src, {}, 600, 20)[0] == 2
+    assert queue_rank(small_src, {}, 600, 20)[0] == 1
+    # 关闭体积后置时退回普通重活
+    assert queue_rank(big_src, {}, 600, 0)[0] == 1
+    # 关掉慢文档后置时也退回普通重活
+    assert queue_rank(big_src, {"huge.pdf": 9999.0}, 0, 0)[0] == 1
+
+
+def test_slow_source_estimates_reads_audit_log(tmp_path) -> None:
+    """历史耗时来自逐篇审计；损坏行与缺字段必须被忽略而不是报错。"""
+
+    import json
+
+    from ts_knowledge_agent.services.pipeline import slow_source_estimates
+
+    logs = tmp_path / "logs"; logs.mkdir()
+    (logs / "conversions.jsonl").write_text(
+        "\n".join([
+            json.dumps({"relative_path": "a.pdf", "seconds": 12.5, "status": "ok"}),
+            json.dumps({"relative_path": "a.pdf", "seconds": 30.0, "status": "ok"}),
+            json.dumps({"source_name": "no-relative.pdf", "seconds": 99.0}),
+            "{ 坏行",
+            json.dumps({"relative_path": "b.pdf", "seconds": "7"}),
+        ]),
+        encoding="utf-8",
+    )
+
+    estimates = slow_source_estimates(tmp_path)
+    assert estimates["a.pdf"] == 30.0, "同名取最大耗时"
+    assert estimates["b.pdf"] == 7.0
+    assert "no-relative.pdf" not in estimates
+
+
+def test_slow_source_estimates_without_audit_file(tmp_path) -> None:
+    from ts_knowledge_agent.services.pipeline import slow_source_estimates
+
+    assert slow_source_estimates(tmp_path) == {}

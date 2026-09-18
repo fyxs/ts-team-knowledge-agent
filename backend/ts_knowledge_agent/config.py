@@ -18,6 +18,10 @@ DEFAULT_MINERU_TIMEOUT_SECONDS = 3600
 """MinerU 单次转换的超时上限（秒）；超大文档可调高，配合 mineru_chunk_pages 分片。"""
 MIN_MINERU_TIMEOUT_SECONDS = 60
 DEFAULT_MINERU_CHUNK_PAGES = 0
+DEFAULT_SLOW_SOURCE_SECONDS = 600
+"""单篇历史耗时超过此值即视为「慢文档」，排队后置，避免堵住中小文档。"""
+DEFAULT_LARGE_SOURCE_MB = 20
+"""首次遇到、体积超过此值的重活文档同样后置（0 = 不按体积后置）。"""
 DEFAULT_MINERU_RENDER_TIMEOUT_SECONDS = 300
 """MinerU 单批 PDF 页面渲染超时（秒），对应 MINERU_PDF_RENDER_TIMEOUT；0 = 交给 MinerU 默认。"""
 DEFAULT_MINERU_RENDER_THREADS = 3
@@ -89,6 +93,16 @@ def parse_mineru_render_threads(value: object) -> int:
     return threads
 
 
+def parse_non_negative_int(value: object, default: int, name: str) -> int:
+    """通用非负整数解析：空值回退默认，负值报错。"""
+
+    raw = str(value).strip() if value is not None else ""
+    number = default if not raw else int(float(raw))
+    if number < 0:
+        raise ValueError(name + " must not be negative, got " + str(number))
+    return number
+
+
 def parse_sources_max_display(value: object) -> int:
     """展示来源条数上限；非法值直接报错，避免静默退回默认值。"""
     if value is None or value == "":
@@ -128,6 +142,8 @@ class Settings:
     mineru_chunk_pages: int = DEFAULT_MINERU_CHUNK_PAGES
     mineru_render_timeout_seconds: int = DEFAULT_MINERU_RENDER_TIMEOUT_SECONDS
     mineru_render_threads: int = DEFAULT_MINERU_RENDER_THREADS
+    slow_source_threshold_seconds: int = DEFAULT_SLOW_SOURCE_SECONDS
+    large_source_mb: int = DEFAULT_LARGE_SOURCE_MB
     sync_on_schedule: bool = True
     model_provider: str = ""
     model_name: str = ""
@@ -173,6 +189,11 @@ class Settings:
             mineru_chunk_pages=parse_mineru_chunk_pages(data.get("mineru_chunk_pages")),
             mineru_render_timeout_seconds=parse_mineru_render_timeout(data.get("mineru_render_timeout_seconds")),
             mineru_render_threads=parse_mineru_render_threads(data.get("mineru_render_threads")),
+            slow_source_threshold_seconds=parse_non_negative_int(
+                data.get("slow_source_threshold_seconds"), DEFAULT_SLOW_SOURCE_SECONDS,
+                "slow_source_threshold_seconds"),
+            large_source_mb=parse_non_negative_int(
+                data.get("large_source_mb"), DEFAULT_LARGE_SOURCE_MB, "large_source_mb"),
             sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
             model_provider=str(data.get("model_provider", "")).strip(),
             model_name=str(data.get("model_name", "")).strip(),
@@ -200,6 +221,8 @@ class Settings:
             "mineru_chunk_pages": self.mineru_chunk_pages,
             "mineru_render_timeout_seconds": self.mineru_render_timeout_seconds,
             "mineru_render_threads": self.mineru_render_threads,
+            "slow_source_threshold_seconds": self.slow_source_threshold_seconds,
+            "large_source_mb": self.large_source_mb,
             "sync_on_schedule": self.sync_on_schedule,
             "model_provider": self.model_provider,
             "model_name": self.model_name,

@@ -29,6 +29,64 @@ class ProcessingBatch:
     number: int
     files: tuple[SourceFile, ...]
 
+def slow_source_estimates(working_directory: Path, limit: int = 5000) -> dict[str, float]:
+    """从逐篇审计里读出每个来源的历史耗时（取最大值）。
+
+    用途：把「上次跑了几十分钟」的大文档排到队尾，别让它堵住中小文档。
+    只有成功与失败都记录了耗时的轮次才会产生数据，没有历史的文件按未知处理。
+    """
+
+    path = Path(working_directory) / "logs" / "conversions.jsonl"
+    if not path.is_file():
+        return {}
+    estimates: dict[str, float] = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[-limit:]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        relative = str(record.get("relative_path") or "").strip()
+        seconds = record.get("seconds")
+        if not relative or seconds is None:
+            continue
+        try:
+            value = float(seconds)
+        except (TypeError, ValueError):
+            continue
+        if value > estimates.get(relative, 0.0):
+            estimates[relative] = value
+    return estimates
+
+
+def queue_rank(source: SourceFile, estimates: dict[str, float], slow_seconds: int, large_mb: int) -> tuple:
+    """排队名次：轻量 → 普通重活 → 已知慢/超大（后者后置，不堵中小文档）。
+
+    返回元组可直接用于 sorted 键；末位用路径保证顺序稳定可复现。
+    """
+
+    cost = conversion_cost_class(source.absolute_path)
+    observed = estimates.get(source.relative_path, 0.0)
+    if slow_seconds > 0 and observed >= slow_seconds:
+        tier = 3  # 实测慢文档：一定排在中小文档之后
+    elif large_mb > 0 and cost == 1 and _size_bytes(source.absolute_path) >= large_mb * 1024 * 1024:
+        tier = 2  # 体积超大的首次文档：同样后置
+    else:
+        tier = cost
+    return (tier, source.relative_path.lower())
+
+
+def _size_bytes(path: Path) -> int:
+    """读文件大小；文件不存在或读不到时按 0 处理（不可因为排序失败中断整轮）。"""
+
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
 def plan_batches(files: list[SourceFile], batch_size: int) -> list[ProcessingBatch]:
     """按车道（轻量优先）与路径分批，让新加入的 md/txt 不被 MinerU 重活堵在队尾。
 
@@ -96,6 +154,7 @@ def log_conversion_timing(settings: Settings, source, converter_label: str,
         log_dir.mkdir(parents=True, exist_ok=True)
         record = {
             "at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "relative_path": getattr(source, "relative_path", ""),
             "source_suffix": source.absolute_path.suffix.lower(),
             "source_name": source.absolute_path.name,
             "converter": converter_label,
@@ -135,7 +194,12 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     reason_counts["deferred_to_other_lane"]=reason_counts.get("deferred_to_other_lane",0)+1
                     continue
                 pending.append((source,reason))
-        batches=plan_batches([source for source,_ in pending], batch_size)
+        estimates = slow_source_estimates(settings.working_directory)
+        ordered = sorted((source for source, _ in pending),
+                         key=lambda item: queue_rank(item, estimates,
+                                                     settings.slow_source_threshold_seconds,
+                                                     settings.large_source_mb))
+        batches=plan_batches(ordered, batch_size)
         reason_by_path={source.relative_path:reason for source,reason in pending}
         for batch in batches:
             if on_batch: on_batch(batch)
