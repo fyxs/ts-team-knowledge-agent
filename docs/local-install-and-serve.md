@@ -90,9 +90,14 @@ Windows 上由计划任务调用 `scripts/` 下的运行脚本（经 wscript 隐
 | 计划任务 | 触发 | 运行脚本 | 说明 |
 | --- | --- | --- | --- |
 | `TSKnowledgeAgentScheduler` | 每 5 分钟 | `run-scheduled.ps1` | 敲门；未到 `scan_interval_minutes` 则静默跳过 |
+| `TSKnowledgeAgentSchedulerLight` | 每 5 分钟（晚 2 分钟） | `run-scheduled-light.ps1` | 轻量车道：只做 md/txt/xlsx，持独立 `light.lock`，不被 MinerU 重活堵塞；未到期同样静默跳过 |
 | `TSKnowledgeAgentInspection` | 每天 08:30 | `run-inspection.ps1` | 错过时唤醒补跑 |
 | `TSKnowledgeAgentEvaluation` | 每周一 09:00 | `run-evaluation.ps1` | 安装时需带 `-IncludeMaintenance` |
 | `TSKnowledgeAgentWebService` | 用户登录时 | `run-web-service-hidden.vbs` | 幂等守护：8088 已在监听则直接退出 |
+
+车道说明：主任务是全车道（重活可能单轮跑很久），轻量任务专治"新加的 md 被大文件堵在后面"。
+两条车道用各自的锁（`run.lock` / `light.lock`），互不阻塞；到期判断也按车道分别计时，
+所以轻量轮次不会把主任务判成"刚跑过"。
 
 任务由 `scripts/install-windows-tasks.ps1` 注册，可反复执行（幂等）：
 

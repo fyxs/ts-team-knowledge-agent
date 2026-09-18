@@ -11,7 +11,7 @@ WARNING_STATUSES = frozenset({"quality_warned"})
 
 class StateStore:
     def __init__(self,path:Path)->None:
-        self.path=path; self.path.parent.mkdir(parents=True,exist_ok=True); self.connection=sqlite3.connect(self.path); self.connection.row_factory=sqlite3.Row; self._init_schema()
+        self.path=path; self.path.parent.mkdir(parents=True,exist_ok=True); self.connection=sqlite3.connect(self.path,timeout=30); self.connection.row_factory=sqlite3.Row; self._init_schema()
     def _init_schema(self)->None:
         self.connection.executescript("""
         CREATE TABLE IF NOT EXISTS sources(relative_path TEXT PRIMARY KEY,size INTEGER NOT NULL,mtime_ns INTEGER NOT NULL,sha256 TEXT NOT NULL,status TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);

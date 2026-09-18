@@ -58,6 +58,7 @@ function New-Launcher {
 }
 
 $vbsScheduled = New-Launcher 'run-scheduled-hidden.vbs' (Join-Path $root 'scripts\run-scheduled.ps1')
+$vbsScheduledLight = New-Launcher 'run-scheduled-light-hidden.vbs' (Join-Path $root 'scripts\run-scheduled-light.ps1')
 $vbsInspection = New-Launcher 'run-inspection-hidden.vbs' (Join-Path $root 'scripts\run-inspection.ps1')
 $vbsWeb = Join-Path $work 'run-web-service-hidden.vbs'
 
@@ -82,6 +83,11 @@ $a1 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsSchedu
 $t1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentScheduler' -Action $a1 -Trigger $t1 -Principal $principal -Settings $settings -Force | Out-Null
 
+# Light lane task: starts 2 minutes after the main task so the two never fire at the same instant.
+$a1b = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsScheduledLight + '"')
+$t1b = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
+Register-ScheduledTask -TaskName 'TSKnowledgeAgentSchedulerLight' -Action $a1b -Trigger $t1b -Principal $principal -Settings $settings -Force | Out-Null
+
 $a2 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsInspection + '"')
 $t2 = New-ScheduledTaskTrigger -Daily -At $InspectionDailyAt
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentInspection' -Action $a2 -Trigger $t2 -Principal $principal -Settings $settings -Force | Out-Null
@@ -99,6 +105,7 @@ $t3 = New-ScheduledTaskTrigger -AtLogOn -User $TaskUser
 Register-ScheduledTask -TaskName 'TSKnowledgeAgentWebService' -Action $a3 -Trigger $t3 -Principal $principal -Settings $settings -Force | Out-Null
 
 $installed = @('TSKnowledgeAgentScheduler')
+$installed += 'TSKnowledgeAgentSchedulerLight'
 $installed += 'TSKnowledgeAgentInspection'
 if ($IncludeMaintenance) { $installed += 'TSKnowledgeAgentEvaluation' }
 $installed += 'TSKnowledgeAgentWebService'

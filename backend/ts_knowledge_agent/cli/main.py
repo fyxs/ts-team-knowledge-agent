@@ -356,7 +356,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "run-once":
         if args.batch_size < 1:
             parser.error("batch-size must be at least 1")
-        if args.if_due and not is_scan_due(settings):
+        if args.if_due and not is_scan_due(settings, lane=getattr(args, "lane", "all")):
             print(f"skipped=not_due scan_interval_minutes={settings.scan_interval_minutes}")
             return 0
         try:

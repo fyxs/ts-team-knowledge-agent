@@ -14,9 +14,9 @@ def _run_result(error: str | None) -> str:
     return "locked" if "already active" in error else "failed"
 
 
-def _write_run_report(settings: Settings, summary: RunSummary, started: str, ended: str, duration: float, error: str|None=None)->Path:
+def _write_run_report(settings: Settings, summary: RunSummary, started: str, ended: str, duration: float, error: str|None=None, lane: str = "all")->Path:
     path=settings.working_directory/"logs"/"runs.jsonl"; path.parent.mkdir(parents=True,exist_ok=True)
-    record={"started_at":started,"finished_at":ended,"duration_seconds":round(duration,3),"scanned":summary.scanned,"queued":summary.queued,"batches":summary.batches,"converted":summary.converted,"warned":summary.warned,"skipped":summary.skipped,"failed":summary.failed,"missing":summary.missing,"indexed":summary.indexed,"sync_status":summary.sync_status,"reason_counts":summary.reason_counts,"result":_run_result(error),"error":error}
+    record={"started_at":started,"lane":lane,"finished_at":ended,"duration_seconds":round(duration,3),"scanned":summary.scanned,"queued":summary.queued,"batches":summary.batches,"converted":summary.converted,"warned":summary.warned,"skipped":summary.skipped,"failed":summary.failed,"missing":summary.missing,"indexed":summary.indexed,"sync_status":summary.sync_status,"reason_counts":summary.reason_counts,"result":_run_result(error),"error":error}
     with path.open("a",encoding="utf-8") as f: f.write(json.dumps(record,ensure_ascii=False)+"\n")
     return path
 
@@ -31,10 +31,10 @@ def run_once_with_report(settings: Settings, *, sync: bool = False, batch_size: 
     except Exception as exc:
         ended = datetime.now(timezone.utc).isoformat()
         fallback = RunSummary(0, failed=1, reason_counts={"run_once_error": 1})
-        _write_run_report(settings, fallback, started, ended, time.perf_counter() - started_perf, f"{type(exc).__name__}: {exc}")
+        _write_run_report(settings, fallback, started, ended, time.perf_counter() - started_perf, f"{type(exc).__name__}: {exc}", lane=lane)
         raise
     ended = datetime.now(timezone.utc).isoformat()
-    _write_run_report(settings, summary, started, ended, time.perf_counter() - started_perf, error)
+    _write_run_report(settings, summary, started, ended, time.perf_counter() - started_perf, error, lane=lane)
     return summary
 
 
@@ -57,11 +57,26 @@ def run_scheduler(settings: Settings, run: Callable[[Settings],RunSummary]|None=
     return exit_code
 
 
-def last_run_started_at(working_directory: Path) -> datetime | None:
-    """读取运行报告里最近一轮的开始时间；没有记录时返回 None。"""
+LANE_REPORT_MATCH = {
+    "all": frozenset({"all"}),
+    "light": frozenset({"all", "light"}),
+    "heavy": frozenset({"all", "heavy"}),
+}
+"""车道到期判断：哪几种轮次算作"该车道刚跑过"。
+
+全车道轮次（all）两类活都做，因此对 light/heavy 都算数；
+反之轻量轮次不算重活跑过，全车道轮次也只由全车道计时 ——
+否则每 5 分钟的轻量轮次会把主任务与重活永远判成"刚跑过"。
+历史记录没有 lane 字段时按 all 处理。
+"""
+
+
+def last_run_started_at(working_directory: Path, lane: str = "all") -> datetime | None:
+    """读取运行报告里最近一轮的开始时间；按车道过滤（默认任意车道）。"""
     report = Path(working_directory) / "logs" / "runs.jsonl"
     if not report.is_file():
         return None
+    wanted = LANE_REPORT_MATCH.get(lane, LANE_REPORT_MATCH["all"])
     for line in reversed(report.read_text(encoding="utf-8", errors="replace").splitlines()):
         line = line.strip()
         if not line:
@@ -69,6 +84,8 @@ def last_run_started_at(working_directory: Path) -> datetime | None:
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
+            continue
+        if (payload.get("lane") or "all") not in wanted:
             continue
         raw = payload.get("started_at")
         if not raw:
@@ -80,9 +97,13 @@ def last_run_started_at(working_directory: Path) -> datetime | None:
     return None
 
 
-def is_scan_due(settings: Settings, now: datetime | None = None) -> bool:
-    """按配置的扫描间隔判断本轮是否该执行；无历史记录时视为到期。"""
-    last = last_run_started_at(settings.working_directory)
+def is_scan_due(settings: Settings, now: datetime | None = None, lane: str = "all") -> bool:
+    """按配置的扫描间隔判断本轮是否该执行；无历史记录时视为到期。
+
+    lane 决定看哪一类轮次的历史：轻量车道与重活车道各自独立计时，
+    否则轻量的高频轮次会把重活永远判成"刚跑过"。
+    """
+    last = last_run_started_at(settings.working_directory, lane=lane)
     if last is None:
         return True
     current = now or datetime.now(timezone.utc)
