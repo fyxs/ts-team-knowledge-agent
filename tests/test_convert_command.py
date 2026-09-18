@@ -33,8 +33,11 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
     source.write_bytes(b"%PDF-1.4")
     captured = {}
 
-    def fake_convert(source_path, output_path, converter=None, mineru_python=None):
+    def fake_convert(source_path, output_path, converter=None, mineru_python=None,
+                     mineru_timeout_seconds=3600, mineru_chunk_pages=0):
         captured["mineru_python"] = mineru_python
+        captured["mineru_timeout_seconds"] = mineru_timeout_seconds
+        captured["mineru_chunk_pages"] = mineru_chunk_pages
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("# ok", encoding="utf-8")
         return SimpleNamespace(output_path=output_path, bytes_written=4)
@@ -46,6 +49,9 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
 
     assert code == 0
     assert captured["mineru_python"] == interpreter
+    # 这两个限制也必须来自配置（默认值 3600 / 0），否则大文档场景无法调参
+    assert captured["mineru_timeout_seconds"] == 3600
+    assert captured["mineru_chunk_pages"] == 0
 
 
 def test_convert_without_mineru_explains_what_to_do(tmp_path, monkeypatch, capsys):

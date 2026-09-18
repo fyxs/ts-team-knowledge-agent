@@ -14,6 +14,11 @@ MIN_SCAN_INTERVAL_MINUTES = 5
 
 DEFAULT_SOURCES_MAX_DISPLAY = 8
 DEFAULT_SOURCES_RELEVANCE_RATIO = 0.5
+DEFAULT_MINERU_TIMEOUT_SECONDS = 3600
+"""MinerU 单次转换的超时上限（秒）；超大文档可调高，配合 mineru_chunk_pages 分片。"""
+MIN_MINERU_TIMEOUT_SECONDS = 60
+DEFAULT_MINERU_CHUNK_PAGES = 0
+"""0 = 不分片。大于 0 时按此页数把大 PDF 分片转换再合并，降低单次失败代价。"""
 
 
 def config_candidates() -> list[Path]:
@@ -95,6 +100,8 @@ class Settings:
     scan_interval_minutes: int = DEFAULT_SCAN_INTERVAL_MINUTES
     shared_knowledge_repository_url: str = DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL
     mineru_python: Path | None = None
+    mineru_timeout_seconds: int = DEFAULT_MINERU_TIMEOUT_SECONDS
+    mineru_chunk_pages: int = DEFAULT_MINERU_CHUNK_PAGES
     sync_on_schedule: bool = True
     model_provider: str = ""
     model_name: str = ""
@@ -136,6 +143,8 @@ class Settings:
             scan_interval_minutes=parse_interval_minutes(str(data.get("scan_interval_minutes", 60))),
             shared_knowledge_repository_url=str(data.get("shared_knowledge_repository_url", DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL)).strip() or DEFAULT_SHARED_KNOWLEDGE_REPOSITORY_URL,
             mineru_python=Path(data["mineru_python"]).expanduser() if str(data.get("mineru_python", "")).strip() else None,
+            mineru_timeout_seconds=parse_mineru_timeout_seconds(data.get("mineru_timeout_seconds")),
+            mineru_chunk_pages=parse_mineru_chunk_pages(data.get("mineru_chunk_pages")),
             sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
             model_provider=str(data.get("model_provider", "")).strip(),
             model_name=str(data.get("model_name", "")).strip(),
@@ -159,6 +168,8 @@ class Settings:
             "scan_interval_minutes": self.scan_interval_minutes,
             "shared_knowledge_repository_url": self.shared_knowledge_repository_url,
             "mineru_python": str(self.mineru_python) if self.mineru_python else "",
+            "mineru_timeout_seconds": self.mineru_timeout_seconds,
+            "mineru_chunk_pages": self.mineru_chunk_pages,
             "sync_on_schedule": self.sync_on_schedule,
             "model_provider": self.model_provider,
             "model_name": self.model_name,
@@ -194,6 +205,26 @@ WORKSPACE_README_TEXT = """# 工作目录
 - 动手前先确认服务与计划任务状态（8088 是否在监听、任务是否在跑），避免锁冲突。
 - 结构由 `ts-team-kb init` 初始化；本文件同样由 init 生成，可人工补充，但结构部分请保持与本表一致。
 """
+
+
+def parse_mineru_timeout_seconds(value: object) -> int:
+    """MinerU 超时（秒）：默认 DEFAULT_MINERU_TIMEOUT_SECONDS，下限 MIN_MINERU_TIMEOUT_SECONDS。"""
+
+    raw = str(value).strip() if value is not None else ""
+    seconds = DEFAULT_MINERU_TIMEOUT_SECONDS if not raw else int(float(raw))
+    if seconds < MIN_MINERU_TIMEOUT_SECONDS:
+        raise ValueError("mineru_timeout_seconds must be at least " + str(MIN_MINERU_TIMEOUT_SECONDS) + ", got " + str(seconds))
+    return seconds
+
+
+def parse_mineru_chunk_pages(value: object) -> int:
+    """大 PDF 分片页数：0（默认）不分片；其它取值必须为正整数。"""
+
+    raw = str(value).strip() if value is not None else ""
+    pages = DEFAULT_MINERU_CHUNK_PAGES if not raw else int(float(raw))
+    if pages < 0:
+        raise ValueError("mineru_chunk_pages must not be negative, got " + str(pages))
+    return pages
 
 
 def clone_knowledge_repo(settings: Settings) -> None:

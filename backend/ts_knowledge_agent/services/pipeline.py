@@ -144,7 +144,9 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                 _started = time.perf_counter()
                 try:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
-                    result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
+                    result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python,
+                                             mineru_timeout_seconds=settings.mineru_timeout_seconds,
+                                             mineru_chunk_pages=settings.mineru_chunk_pages)
                     log_conversion_timing(settings, source, result.converter,
                                           time.perf_counter() - _started, "ok")
                     if not result.from_source:

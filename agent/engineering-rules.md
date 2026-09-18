@@ -141,6 +141,16 @@ cd frontend && pnpm typecheck && pnpm test && pnpm build
   说明解释器目录被安全软件接管，请用 --python 指向可用解释器」。
 - 复用已有环境用 `--python <解释器>`；`--dry-run` 先看计划再执行。
 
+## 超大文档：先调超时与分片，不要当成「文件坏了」
+
+- 转换超时（MinerU 默认 3600 秒）是**每份文件**的上限。页数多、图多的 PDF 会跑不完，
+  被终止后下一轮又当失败重排 —— 表现为「每轮耗时≈超时值、converted=0、failed=1」的稳定空转。
+  实测样本：736 页 / 1039 图的 Word 导出稿，单次 3600 秒不够。
+- 处置顺序：先量规模（页数、图片数、体积），再 `config set --mineru-chunk-pages` 拆片
+  与 `--mineru-timeout` 放宽；**不要**先把它加进 `excluded_source_paths` 排除掉。
+- 判定「真卡住」还是「在慢慢跑」看 `logs/conversions.jsonl`（逐篇耗时审计）：
+  成功与失败都会记 `seconds`，失败记为 `failed:<异常类型>`。
+
 ## 免安装包（exe）打包
 
 - **必须显式指定源码路径**：PyInstaller 的 spec 里 `pathex` 与 `datas` 要指向当前源码树

@@ -266,6 +266,28 @@ py -3 -m venv .venv-build
     --build-python .venv-build\Scripts\python.exe
 ```
 
+超大文档：超时与分片
+
+```text
+mineru_timeout_seconds   MinerU 单次转换超时（秒，默认 3600，下限 60）
+mineru_chunk_pages       大 PDF 分片页数（0 = 不分片，默认）
+
+ts-team-kb config show                                   # 查看当前取值
+ts-team-kb config set --mineru-timeout 14400 --mineru-chunk-pages 100
+```
+
+为什么需要：实测一份 736 页 / 1039 图的 Word 导出稿（7.5 MB）在 3600 秒内跑不完，
+被超时终止后下一轮又当失败重排，形成「每轮 60 分钟只做这一件事」的空转。
+
+```text
+分片机制   按 chunk_pages 用 MinerU 的 start_page_id / end_page_id 逐片解析，
+           再把各片 markdown 按顺序合并；图片统一加 partNNN_ 前缀，避免不同片同名覆盖。
+           单片失败只损失该片，重跑代价从「整篇重来」降到「单片面重来」。
+页数读取   在 MinerU 环境内用 pypdf 读页数；读不到（缺 pypdf 等）则自动退化为不分片，不阻塞转换。
+超时语义   仍是「整次转换」的总超时；分片后总耗时更长，大文档请同时调高 timeout。
+建议取值   100~200 页/片；736 页文档配 timeout 14400（4 小时）实测可用。
+```
+
 发布件大小核对：zip ≈ 35 MB（含 `tools/uv.exe` 41.5 MB 未压缩前的体积影响）、
 wheel ≈ 210 KB。若明显偏大，先怀疑构建环境混入了开发依赖。
 

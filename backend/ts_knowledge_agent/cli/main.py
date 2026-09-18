@@ -133,6 +133,10 @@ def build_parser() -> argparse.ArgumentParser:
     config_set.add_argument("--max-steps", type=int)
     config_set.add_argument("--mineru-python", dest="mineru_python",
                             help="MinerU 解释器路径；复用已有转换环境，避免每台机器重装约 1.1GB")
+    config_set.add_argument("--mineru-timeout", dest="mineru_timeout_seconds", type=int,
+                            help="MinerU 单次转换超时（秒，默认 3600，下限 60）；超大文档需调高")
+    config_set.add_argument("--mineru-chunk-pages", dest="mineru_chunk_pages", type=int,
+                            help="大 PDF 分片页数（0=不分片）；按此页数逐片解析再合并")
     config_key = config_sub.add_parser("set-key")
     config_key.add_argument("--from-file", dest="key_file", help="从文件读取密钥（适合不方便交互输入时）")
     config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
@@ -349,7 +353,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("需要 MinerU 才能转换该格式：请先执行 ts-team-kb setup-mineru，"
                   "或用 ts-team-kb config set --mineru-python <解释器>")
             return 1
-        result = convert_file(source, output, mineru_python=settings.mineru_python)
+        result = convert_file(source, output, mineru_python=settings.mineru_python,
+                                            mineru_timeout_seconds=settings.mineru_timeout_seconds,
+                                            mineru_chunk_pages=settings.mineru_chunk_pages)
         print(f"converted={result.output_path} bytes={result.bytes_written}")
         return 0
 
@@ -417,6 +423,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if action == "show":
             print(json.dumps({
                 "config_path": str(config_path),
+                "mineru_timeout_seconds": settings.mineru_timeout_seconds,
+                "mineru_chunk_pages": settings.mineru_chunk_pages,
                 "config_exists": config_path.is_file(),
                 "provider": settings.model_provider or "(unset, defaults to openai-compatible)",
                 "model": settings.model_name or "(unset)",
@@ -439,8 +447,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.max_steps: updates["model_max_steps"] = int(args.max_steps)
             if getattr(args, "mineru_python", None):
                 updates["mineru_python"] = args.mineru_python.strip()
+            if getattr(args, "mineru_timeout_seconds", None) is not None:
+                if args.mineru_timeout_seconds < 60:
+                    parser.error("--mineru-timeout must be at least 60 seconds")
+                updates["mineru_timeout_seconds"] = int(args.mineru_timeout_seconds)
+            if getattr(args, "mineru_chunk_pages", None) is not None:
+                if args.mineru_chunk_pages < 0:
+                    parser.error("--mineru-chunk-pages must not be negative")
+                updates["mineru_chunk_pages"] = int(args.mineru_chunk_pages)
             if not updates:
-                parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens, --max-steps, --mineru-python")
+                parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens, --max-steps, --mineru-python, --mineru-timeout, --mineru-chunk-pages")
             if not config_path.is_file():
                 parser.error(f"configuration file not found: {config_path}; run ts-team-kb init first")
             replace(settings, **updates).write_file(config_path)

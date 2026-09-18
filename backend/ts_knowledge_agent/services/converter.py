@@ -61,7 +61,8 @@ def conversion_cost_class(source: Path) -> int:
     return 1 if source.suffix.lower() in HEAVY_SUFFIXES else 0
 
 
-def convert_file(source: Path, output: Path, converter: Converter | None = None, mineru_python: str | Path | None = None) -> ConversionResult:
+def convert_file(source: Path, output: Path, converter: Converter | None = None, mineru_python: str | Path | None = None,
+                 mineru_timeout_seconds: int = 3600, mineru_chunk_pages: int = 0) -> ConversionResult:
     source=source.expanduser().resolve(); output=output.expanduser().resolve()
     if not source.is_file(): raise FileNotFoundError(f"source file does not exist: {source}")
     if source == output: raise ValueError("conversion output must not overwrite the source file")
@@ -81,6 +82,7 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
         convert_excel(source, output)
         origin = ORIGIN_TOOL; label = CONVERTER_EXCEL
     else:
-        MinerUConverter(mineru_python).convert_to(source, output)
+        MinerUConverter(mineru_python, timeout_seconds=mineru_timeout_seconds,
+                        chunk_pages=mineru_chunk_pages).convert_to(source, output)
         origin = ORIGIN_TOOL; label = CONVERTER_VERSION
     return ConversionResult(source, output, output.stat().st_size, origin, label)
