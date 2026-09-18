@@ -35,12 +35,15 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
 
     def fake_convert(source_path, output_path, converter=None, mineru_python=None,
                      mineru_timeout_seconds=3600, mineru_chunk_pages=0,
-                     mineru_render_timeout_seconds=300, mineru_render_threads=3):
+                     mineru_render_timeout_seconds=300, mineru_render_threads=3,
+                     mineru_chunk_concurrency=2, working_directory=None):
         captured["mineru_python"] = mineru_python
         captured["mineru_timeout_seconds"] = mineru_timeout_seconds
         captured["mineru_chunk_pages"] = mineru_chunk_pages
         captured["mineru_render_timeout_seconds"] = mineru_render_timeout_seconds
         captured["mineru_render_threads"] = mineru_render_threads
+        captured["mineru_chunk_concurrency"] = mineru_chunk_concurrency
+        captured["working_directory"] = working_directory
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("# ok", encoding="utf-8")
         return SimpleNamespace(output_path=output_path, bytes_written=4)
@@ -57,6 +60,8 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
     assert captured["mineru_chunk_pages"] == 0
     assert captured["mineru_render_timeout_seconds"] == 300
     assert captured["mineru_render_threads"] == 3
+    assert captured["mineru_chunk_concurrency"] == 2
+    assert captured["working_directory"] == tmp_path, "分片续传依赖工作目录"
 
 
 def test_convert_without_mineru_explains_what_to_do(tmp_path, monkeypatch, capsys):

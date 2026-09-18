@@ -140,9 +140,11 @@ def test_adapter_injects_render_env(monkeypatch, tmp_path: Path) -> None:
         interpreter, timeout_seconds=60, chunk_pages=50,
         render_timeout_seconds=1800, render_threads=6)
     work = tmp_path / "work"; work.mkdir()
-    converter._run(tmp_path / "a.pdf", work)
+    converter._run_worker("parse", tmp_path / "a.pdf", work / "output", start=0, end=49)
 
     assert captured["env"]["MINERU_PDF_RENDER_TIMEOUT"] == "1800"
     assert captured["env"]["MINERU_PDF_RENDER_THREADS"] == "6"
-    # 分片页数也随参数传给子进程（argv[4]）
-    assert captured["args"][4] == "50"
+    # 页范围随参数传给子进程：mode / source / out_dir / start / end
+    assert captured["args"][2] == "parse"
+    assert captured["args"][4].endswith("output")
+    assert captured["args"][5] == "0" and captured["args"][6] == "49"

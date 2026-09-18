@@ -71,5 +71,5 @@ def test_timeout_terminates_tree(monkeypatch, tmp_path):
     work.mkdir()
 
     with pytest.raises(TimeoutError):
-        converter._run(tmp_path / "a.pdf", work)
+        converter._run_worker("parse", tmp_path / "a.pdf", work / "output")
     assert killed == [4242]

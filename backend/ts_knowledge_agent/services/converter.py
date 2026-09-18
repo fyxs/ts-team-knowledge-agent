@@ -63,7 +63,8 @@ def conversion_cost_class(source: Path) -> int:
 
 def convert_file(source: Path, output: Path, converter: Converter | None = None, mineru_python: str | Path | None = None,
                  mineru_timeout_seconds: int = 3600, mineru_chunk_pages: int = 0,
-                 mineru_render_timeout_seconds: int = 0, mineru_render_threads: int = 3) -> ConversionResult:
+                 mineru_render_timeout_seconds: int = 0, mineru_render_threads: int = 3,
+                 mineru_chunk_concurrency: int = 2, working_directory: Path | None = None) -> ConversionResult:
     source=source.expanduser().resolve(); output=output.expanduser().resolve()
     if not source.is_file(): raise FileNotFoundError(f"source file does not exist: {source}")
     if source == output: raise ValueError("conversion output must not overwrite the source file")
@@ -83,9 +84,12 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
         convert_excel(source, output)
         origin = ORIGIN_TOOL; label = CONVERTER_EXCEL
     else:
-        MinerUConverter(mineru_python, timeout_seconds=mineru_timeout_seconds,
-                        chunk_pages=mineru_chunk_pages,
-                        render_timeout_seconds=mineru_render_timeout_seconds,
-                        render_threads=mineru_render_threads).convert_to(source, output)
+        converter_impl = MinerUConverter(mineru_python, timeout_seconds=mineru_timeout_seconds,
+                                        chunk_pages=mineru_chunk_pages,
+                                        render_timeout_seconds=mineru_render_timeout_seconds,
+                                        render_threads=mineru_render_threads,
+                                        chunk_concurrency=mineru_chunk_concurrency)
+        work_root = (Path(working_directory) / "runtime" / "mineru-chunks") if working_directory else None
+        converter_impl.convert_to(source, output, work_root=work_root)
         origin = ORIGIN_TOOL; label = CONVERTER_VERSION
     return ConversionResult(source, output, output.stat().st_size, origin, label)
