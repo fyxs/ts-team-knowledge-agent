@@ -87,6 +87,9 @@ def log_conversion_timing(settings: Settings, source, converter_label: str,
 
     没有它就无法区分"在慢慢跑重活"与"卡住了"（实测因此误判多次，
     一度把 15 分钟的 PDF 推理当成流水线卡死）。
+
+    status："ok" = 转换成功；"failed:<异常类型>" = 失败或超时（失败路径同样要留痕，
+    否则最需要耗时的场景反而没有记录）。
     """
     try:
         log_dir = settings.working_directory / "logs"
@@ -138,9 +141,9 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
             if on_batch: on_batch(batch)
             for source in batch.files:
                 output=output_path_for(settings,source.relative_path); reason=reason_by_path[source.relative_path]
+                _started = time.perf_counter()
                 try:
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"processing",reason=reason)
-                    _started = time.perf_counter()
                     result=convert_file(source.absolute_path,output,converter=converter,mineru_python=settings.mineru_python)
                     log_conversion_timing(settings, source, result.converter,
                                           time.perf_counter() - _started, "ok")
@@ -205,6 +208,10 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     else:
                         converted+=1
                 except Exception as exc:
+                    # 失败/超时同样记耗时：这类记录最能用来区分「卡住」与「在跑」
+                    log_conversion_timing(settings, source, CONVERTER_VERSION,
+                                          time.perf_counter() - _started,
+                                          "failed:" + type(exc).__name__)
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc),reason=reason)
                     state.update_source_status(source.relative_path,"failed_retryable")
                     failed+=1

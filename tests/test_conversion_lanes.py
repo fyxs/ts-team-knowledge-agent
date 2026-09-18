@@ -126,3 +126,30 @@ def test_conversion_timing_log_records_each_file(tmp_path: Path) -> None:
     assert records[-1]["source_name"] == "note.md"
     assert records[-1]["status"] == "ok"
     assert isinstance(records[-1]["seconds"], (int, float))
+
+def test_failed_conversion_is_audited(tmp_path):
+    """失败/超时也必须写审计：那是判断"卡住"与"在跑"的主要依据。"""
+
+    from ts_knowledge_agent.config import Settings
+    from ts_knowledge_agent.services.pipeline import run_once
+    import json
+
+    source_root = tmp_path / "source"; repo = tmp_path / "repo"
+    source_root.mkdir()
+    (source_root / "boom.pdf").write_bytes(b"%PDF-1.4 fake")
+
+    settings = Settings("wanghm", source_root, tmp_path, repo, 60, "unused")
+
+    class Exploding:
+        def convert(self, source):
+            raise TimeoutError("MinerU conversion timed out after 3600s")
+
+    summary = run_once(settings, batch_size=5, converter=Exploding())
+    assert summary.failed == 1
+
+    audit = tmp_path / "logs" / "conversions.jsonl"
+    assert audit.is_file(), "失败轮次也必须落审计日志"
+    records = [json.loads(l) for l in audit.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert records and records[-1]["status"] == "failed:TimeoutError"
+    assert records[-1]["source_name"] == "boom.pdf"
+    assert "seconds" in records[-1] and records[-1]["seconds"] >= 0
