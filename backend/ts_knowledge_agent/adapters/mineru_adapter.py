@@ -36,7 +36,8 @@ def find_markdown(root: Path) -> Path:
     return files[0]
 
 class MinerUConverter:
-    def __init__(self, python: str | Path | None, timeout_seconds: int = 3600, chunk_pages: int = 0):
+    def __init__(self, python: str | Path | None, timeout_seconds: int = 3600, chunk_pages: int = 0,
+                 render_timeout_seconds: int = 0, render_threads: int = 3):
         if not python:
             raise ValueError("MinerU Python interpreter must be configured explicitly")
         self.python = Path(python)
@@ -44,6 +45,12 @@ class MinerUConverter:
         # 大 PDF 分片页数：0 = 不分片。超大文档（实测 736 页 / 1039 图的 Word 导出稿）
         # 单次超时内跑不完，分片后单片规模可控，失败代价从整篇重来降到单片面重来。
         self.chunk_pages = int(chunk_pages or 0)
+        # MinerU 内部的 PDF 页面渲染超时与线程数（环境变量 MINERU_PDF_RENDER_*）。
+        # 这一层比我们的整次超时更靠底：渲染卡住时 MinerU 自己会先抛 TimeoutError
+        # （实测默认 300 秒，CPU 被别的转换占满时 2 页都渲染不完）。
+        # 0 = 不注入，沿用 MinerU 默认。
+        self.render_timeout_seconds = int(render_timeout_seconds or 0)
+        self.render_threads = int(render_threads or 0)
         if not self.python.is_file():
             raise FileNotFoundError(f"MinerU Python interpreter does not exist: {self.python}")
     def convert_to(self, source: Path, output: Path) -> None:
@@ -160,10 +167,15 @@ class MinerUConverter:
             'if __name__ == "__main__":\n' +
             '    main()\n', encoding="utf-8")
         try:
+            child_env = dict(os.environ)
+            if self.render_timeout_seconds > 0:
+                child_env["MINERU_PDF_RENDER_TIMEOUT"] = str(self.render_timeout_seconds)
+            if self.render_threads > 0:
+                child_env["MINERU_PDF_RENDER_THREADS"] = str(self.render_threads)
             process = subprocess.Popen(
                 [str(self.python), str(script), str(source), str(work / "output"), str(self.chunk_pages)],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                encoding="utf-8", errors="replace",
+                encoding="utf-8", errors="replace", env=child_env,
             )
             try:
                 stdout, stderr = process.communicate(timeout=self.timeout_seconds)

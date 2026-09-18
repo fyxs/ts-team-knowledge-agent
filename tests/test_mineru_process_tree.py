@@ -65,6 +65,8 @@ def test_timeout_terminates_tree(monkeypatch, tmp_path):
     converter.python = Path("python.exe")
     converter.timeout_seconds = 1
     converter.chunk_pages = 0  # 分片关闭：本用例只关心超时终止行为
+    converter.render_timeout_seconds = 0  # 不注入渲染超时，保持用例聚焦
+    converter.render_threads = 0
     work = tmp_path / "work"
     work.mkdir()
 

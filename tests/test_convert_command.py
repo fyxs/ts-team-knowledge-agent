@@ -34,10 +34,13 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
     captured = {}
 
     def fake_convert(source_path, output_path, converter=None, mineru_python=None,
-                     mineru_timeout_seconds=3600, mineru_chunk_pages=0):
+                     mineru_timeout_seconds=3600, mineru_chunk_pages=0,
+                     mineru_render_timeout_seconds=300, mineru_render_threads=3):
         captured["mineru_python"] = mineru_python
         captured["mineru_timeout_seconds"] = mineru_timeout_seconds
         captured["mineru_chunk_pages"] = mineru_chunk_pages
+        captured["mineru_render_timeout_seconds"] = mineru_render_timeout_seconds
+        captured["mineru_render_threads"] = mineru_render_threads
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("# ok", encoding="utf-8")
         return SimpleNamespace(output_path=output_path, bytes_written=4)
@@ -52,6 +55,8 @@ def test_convert_passes_configured_mineru_interpreter(tmp_path, monkeypatch):
     # 这两个限制也必须来自配置（默认值 3600 / 0），否则大文档场景无法调参
     assert captured["mineru_timeout_seconds"] == 3600
     assert captured["mineru_chunk_pages"] == 0
+    assert captured["mineru_render_timeout_seconds"] == 300
+    assert captured["mineru_render_threads"] == 3
 
 
 def test_convert_without_mineru_explains_what_to_do(tmp_path, monkeypatch, capsys):

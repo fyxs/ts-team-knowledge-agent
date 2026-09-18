@@ -274,6 +274,7 @@ mineru_chunk_pages       大 PDF 分片页数（0 = 不分片，默认）
 
 ts-team-kb config show                                   # 查看当前取值
 ts-team-kb config set --mineru-timeout 14400 --mineru-chunk-pages 100
+ts-team-kb config set --mineru-render-timeout 1800 --mineru-render-threads 4
 ```
 
 为什么需要：实测一份 736 页 / 1039 图的 Word 导出稿（7.5 MB）在 3600 秒内跑不完，
@@ -286,6 +287,11 @@ ts-team-kb config set --mineru-timeout 14400 --mineru-chunk-pages 100
 页数读取   在 MinerU 环境内用 pypdf 读页数；读不到（缺 pypdf 等）则自动退化为不分片，不阻塞转换。
 超时语义   仍是「整次转换」的总超时；分片后总耗时更长，大文档请同时调高 timeout。
 建议取值   100~200 页/片；736 页文档配 timeout 14400（4 小时）实测可用。
+三层可控   渲染层（MINERU_PDF_RENDER_TIMEOUT/THREADS，默认 300 秒 / 3 线程）
+           → 单文件总超时（mineru_timeout_seconds，默认 3600）
+           → 分片页数（mineru_chunk_pages，默认不分片）。
+           渲染层先炸的话，调总超时没用 —— 大文档三层一起调。
+           render_timeout 设 0 表示不注入，沿用 MinerU 默认。
 ```
 
 发布件大小核对：zip ≈ 35 MB（含 `tools/uv.exe` 41.5 MB 未压缩前的体积影响）、
