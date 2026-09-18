@@ -50,8 +50,11 @@ function New-Launcher {
         'Set shell = CreateObject("WScript.Shell")',
         ('shell.Environment("Process")("TS_KB_CONFIG") = "' + $configPath + '"'),
         ('shell.CurrentDirectory = "' + $work + '"'),
-        ('code = shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' + $Runner + '""", 0, True')
-        'WScript.Quit code'
+        # 必须不等待（0, False）：等待模式下 wscript 常驻，脚本一慢/一卡就挂死，
+        # 后续触发被 IgnoreNew 策略全部跳过 —— 2026-09-16 与 09-18 各复现一次调度静默停摆。
+        # 代价是拿不到业务退出码；可见性以 logs/runs.jsonl 的 result 与巡检 run_health 为准。
+        ('shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""' + $Runner + '""", 0, False')
+        'WScript.Quit 0'
     )
     Set-Content -LiteralPath $vbs -Value $lines -Encoding Default
     return $vbs
@@ -78,6 +81,7 @@ try { $principal = New-ScheduledTaskPrincipal -UserId $TaskUser -LogonType Inter
 # 作业任务经 VBS 隐藏启动器（shell.Run ..., 0, False，不等待）：
 #   · 直连 powershell.exe 在 Interactive 登录类型下会**闪控制台窗口**（每 5 分钟一次），不可接受
 #   · 包装器绝不可改成等待模式（..., 0, True）：会挂死并使后续触发全部跳过
+#   · 2026-09-18 回归：该约束曾被违反（代码里写成 True）→ 09:00 起调度静默停摆数小时
 #   · 业务成败由 logs/runs.jsonl 的 result 与巡检 run_health 反映，不依赖任务退出码
 $a1 = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('"' + $vbsScheduled + '"')
 $t1 = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes $ScanEveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
