@@ -136,7 +136,10 @@ def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=
 
     if lane not in LANE_LOCK_NAMES:
         raise ValueError("unknown lane: " + lane + "（可选 " + " / ".join(LANE_CHOICES) + "）")
-    with RunLock(settings.working_directory, name=LANE_LOCK_NAMES[lane]):
+    # 锁的过期阈值必须盖住单文件最长转换：否则大文档跑到第 2 小时后锁被判过期，
+    # 新轮接管锁却不会杀掉旧进程 —— 实测出现同一文档两个转换同时在跑、互相抢 CPU。
+    stale = max(7200, int(settings.mineru_timeout_seconds or 0) + 600)
+    with RunLock(settings.working_directory, name=LANE_LOCK_NAMES[lane], stale_seconds=stale):
         return _run_once_locked(settings, sync, batch_size, converter, on_batch, lane=lane)
 
 def log_conversion_timing(settings: Settings, source, converter_label: str,
@@ -201,7 +204,13 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                                                      settings.large_source_mb))
         batches=plan_batches(ordered, batch_size)
         reason_by_path={source.relative_path:reason for source,reason in pending}
+        _round_started = time.perf_counter()
+        _budget_skipped = 0
         for batch in batches:
+            if settings.max_round_seconds > 0 and (time.perf_counter() - _round_started) > settings.max_round_seconds:
+                # 单轮时间预算：本轮到此收尾，剩余文件留给下一轮（不计失败、不改状态）
+                _budget_skipped += len(batch.files)
+                continue
             if on_batch: on_batch(batch)
             for source in batch.files:
                 output=output_path_for(settings,source.relative_path); reason=reason_by_path[source.relative_path]
@@ -212,7 +221,9 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                                              mineru_timeout_seconds=settings.mineru_timeout_seconds,
                                              mineru_chunk_pages=settings.mineru_chunk_pages,
                                              mineru_render_timeout_seconds=settings.mineru_render_timeout_seconds,
-                                             mineru_render_threads=settings.mineru_render_threads)
+                                             mineru_render_threads=settings.mineru_render_threads,
+                                             mineru_chunk_concurrency=settings.mineru_chunk_concurrency,
+                                             working_directory=settings.working_directory)
                     log_conversion_timing(settings, source, result.converter,
                                           time.perf_counter() - _started, "ok")
                     if not result.from_source:
@@ -283,7 +294,10 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                     state.record_conversion(source.relative_path,source.sha256,output,CONVERTER_VERSION,"failed_retryable",str(exc),reason=reason)
                     state.update_source_status(source.relative_path,"failed_retryable")
                     failed+=1
-        skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)+reason_counts.get("excluded",0)
+        if _budget_skipped:
+            reason_counts["round_budget_exhausted"] = _budget_skipped
+
+        skipped=reason_counts.get("unchanged",0)+reason_counts.get("unsupported",0)+reason_counts.get("excluded",0)+reason_counts.get("round_budget_exhausted",0)
         missing=state.mark_missing_sources(seen)
         indexed=index_converted(settings)
         write_source_registry(settings)

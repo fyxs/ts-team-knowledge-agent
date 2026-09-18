@@ -18,6 +18,12 @@ DEFAULT_MINERU_TIMEOUT_SECONDS = 3600
 """MinerU 单次转换的超时上限（秒）；超大文档可调高，配合 mineru_chunk_pages 分片。"""
 MIN_MINERU_TIMEOUT_SECONDS = 60
 DEFAULT_MINERU_CHUNK_PAGES = 0
+DEFAULT_MINERU_CHUNK_CONCURRENCY = 2
+"""分片并发数：实测 MinerU 只用 6/20 核，并发跑不同页段可显著缩短大文档总时长；
+实际并发会按可用内存自动下调（约 4.5GB/worker）。"""
+DEFAULT_MAX_ROUND_SECONDS = 0
+"""单轮时间预算（秒）：0 = 不限。>0 时一轮跑到预算就收尾，剩余文件留给下一轮，
+避免一个超大文档把整轮占死、也避免长时间看不到进度。"""
 DEFAULT_SLOW_SOURCE_SECONDS = 600
 """单篇历史耗时超过此值即视为「慢文档」，排队后置，避免堵住中小文档。"""
 DEFAULT_LARGE_SOURCE_MB = 20
@@ -103,6 +109,16 @@ def parse_non_negative_int(value: object, default: int, name: str) -> int:
     return number
 
 
+def parse_positive_int(value: object, default: int, name: str) -> int:
+    """通用正整数解析：空值回退默认，非正数报错。"""
+
+    raw = str(value).strip() if value is not None else ""
+    number = default if not raw else int(float(raw))
+    if number < 1:
+        raise ValueError(name + " must be at least 1, got " + str(number))
+    return number
+
+
 def parse_sources_max_display(value: object) -> int:
     """展示来源条数上限；非法值直接报错，避免静默退回默认值。"""
     if value is None or value == "":
@@ -144,6 +160,8 @@ class Settings:
     mineru_render_threads: int = DEFAULT_MINERU_RENDER_THREADS
     slow_source_threshold_seconds: int = DEFAULT_SLOW_SOURCE_SECONDS
     large_source_mb: int = DEFAULT_LARGE_SOURCE_MB
+    mineru_chunk_concurrency: int = DEFAULT_MINERU_CHUNK_CONCURRENCY
+    max_round_seconds: int = DEFAULT_MAX_ROUND_SECONDS
     sync_on_schedule: bool = True
     model_provider: str = ""
     model_name: str = ""
@@ -194,6 +212,11 @@ class Settings:
                 "slow_source_threshold_seconds"),
             large_source_mb=parse_non_negative_int(
                 data.get("large_source_mb"), DEFAULT_LARGE_SOURCE_MB, "large_source_mb"),
+            mineru_chunk_concurrency=parse_positive_int(
+                data.get("mineru_chunk_concurrency"), DEFAULT_MINERU_CHUNK_CONCURRENCY,
+                "mineru_chunk_concurrency"),
+            max_round_seconds=parse_non_negative_int(
+                data.get("max_round_seconds"), DEFAULT_MAX_ROUND_SECONDS, "max_round_seconds"),
             sync_on_schedule=str(data.get("sync_on_schedule", "true")).strip().lower() not in {"false", "0", "no"},
             model_provider=str(data.get("model_provider", "")).strip(),
             model_name=str(data.get("model_name", "")).strip(),
@@ -223,6 +246,8 @@ class Settings:
             "mineru_render_threads": self.mineru_render_threads,
             "slow_source_threshold_seconds": self.slow_source_threshold_seconds,
             "large_source_mb": self.large_source_mb,
+            "mineru_chunk_concurrency": self.mineru_chunk_concurrency,
+            "max_round_seconds": self.max_round_seconds,
             "sync_on_schedule": self.sync_on_schedule,
             "model_provider": self.model_provider,
             "model_name": self.model_name,

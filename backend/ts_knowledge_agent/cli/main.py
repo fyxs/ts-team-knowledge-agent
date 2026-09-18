@@ -141,6 +141,10 @@ def build_parser() -> argparse.ArgumentParser:
                             help="MinerU 单批页面渲染超时（秒，默认 300；0=用 MinerU 默认）")
     config_set.add_argument("--mineru-render-threads", dest="mineru_render_threads", type=int,
                             help="MinerU 渲染线程数（默认 3）")
+    config_set.add_argument("--mineru-chunk-concurrency", dest="mineru_chunk_concurrency", type=int,
+                            help="分片并发数（默认 2；会按可用内存自动下调）")
+    config_set.add_argument("--max-round-seconds", dest="max_round_seconds", type=int,
+                            help="单轮时间预算（秒，0=不限）；到点收尾，剩余留到下一轮")
     config_key = config_sub.add_parser("set-key")
     config_key.add_argument("--from-file", dest="key_file", help="从文件读取密钥（适合不方便交互输入时）")
     config_key.add_argument("value", nargs="?", help=argparse.SUPPRESS)
@@ -361,7 +365,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                                             mineru_timeout_seconds=settings.mineru_timeout_seconds,
                                             mineru_chunk_pages=settings.mineru_chunk_pages,
                                             mineru_render_timeout_seconds=settings.mineru_render_timeout_seconds,
-                                            mineru_render_threads=settings.mineru_render_threads)
+                                            mineru_render_threads=settings.mineru_render_threads,
+                                            mineru_chunk_concurrency=settings.mineru_chunk_concurrency,
+                                            working_directory=settings.working_directory)
         print(f"converted={result.output_path} bytes={result.bytes_written}")
         return 0
 
@@ -433,6 +439,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "mineru_chunk_pages": settings.mineru_chunk_pages,
                 "mineru_render_timeout_seconds": settings.mineru_render_timeout_seconds,
                 "mineru_render_threads": settings.mineru_render_threads,
+                "mineru_chunk_concurrency": settings.mineru_chunk_concurrency,
+                "max_round_seconds": settings.max_round_seconds,
                 "config_exists": config_path.is_file(),
                 "provider": settings.model_provider or "(unset, defaults to openai-compatible)",
                 "model": settings.model_name or "(unset)",
@@ -471,8 +479,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if args.mineru_render_threads < 1:
                     parser.error("--mineru-render-threads must be at least 1")
                 updates["mineru_render_threads"] = int(args.mineru_render_threads)
+            if getattr(args, "mineru_chunk_concurrency", None) is not None:
+                if args.mineru_chunk_concurrency < 1:
+                    parser.error("--mineru-chunk-concurrency must be at least 1")
+                updates["mineru_chunk_concurrency"] = int(args.mineru_chunk_concurrency)
+            if getattr(args, "max_round_seconds", None) is not None:
+                if args.max_round_seconds < 0:
+                    parser.error("--max-round-seconds must not be negative")
+                updates["max_round_seconds"] = int(args.max_round_seconds)
             if not updates:
-                parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens, --max-steps, --mineru-python, --mineru-timeout, --mineru-chunk-pages, --mineru-render-timeout, --mineru-render-threads")
+                parser.error("config set requires at least one of --provider, --model, --base-url, --max-tokens, --max-steps, --mineru-python, --mineru-timeout, --mineru-chunk-pages, --mineru-render-timeout, --mineru-render-threads, --mineru-chunk-concurrency, --max-round-seconds")
             if not config_path.is_file():
                 parser.error(f"configuration file not found: {config_path}; run ts-team-kb init first")
             replace(settings, **updates).write_file(config_path)

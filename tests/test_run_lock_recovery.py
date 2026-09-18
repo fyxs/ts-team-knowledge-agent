@@ -71,3 +71,38 @@ def test_lock_older_than_threshold_is_taken_over(tmp_path: Path) -> None:
     with RunLock(work):
         pass
     assert not (work / "runtime" / "run.lock").exists()
+
+def test_lock_stale_threshold_follows_mineru_timeout(tmp_path, monkeypatch):
+    """锁过期阈值必须大于单文件超时：否则长转换跑到一半锁被判过期，出现两个转换同时跑。"""
+    import importlib
+    from ts_knowledge_agent.config import Settings
+    from ts_knowledge_agent.services import pipeline
+    from ts_knowledge_agent.services import run_lock as run_lock_module
+
+    captured = {}
+
+    class FakeLock:
+        def __init__(self, working_directory, name=None, stale_seconds=None):
+            captured["name"] = name
+            captured["stale_seconds"] = stale_seconds
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(pipeline, "RunLock", FakeLock)
+    settings = Settings(
+        personal_workspace="tester",
+        shared_source_directory=tmp_path / "source",
+        working_directory=tmp_path,
+        shared_knowledge_repository_directory=tmp_path / "kb",
+        mineru_timeout_seconds=14400,
+    )
+    try:
+        pipeline.run_once(settings, lane="heavy")
+    except Exception:
+        pass  # 后续步骤失败无所谓，只看锁参数
+    assert captured["stale_seconds"] >= 14400 + 600
+    assert captured["name"] == pipeline.LANE_LOCK_NAMES["heavy"]
