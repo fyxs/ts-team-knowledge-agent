@@ -294,6 +294,45 @@ ts-team-kb config set --mineru-render-timeout 1800 --mineru-render-threads 4
            render_timeout 设 0 表示不注入，沿用 MinerU 默认。
 ```
 
+### 巨型文档：分片并发、断点续传与时间预算
+
+超大 PDF（实测 736 页 / 1039 图 / 7.5MB 的 Word 导出稿）在这台机器上单篇要 4~5 小时，
+因此转换侧提供四个正交旋钮 + 一套排队与续跑机制：
+
+```text
+mineru_chunk_pages            每 N 页一片（0=不分片）。736 页按 100 页切片 → 8 片
+mineru_chunk_concurrency      同时跑几片（默认 2）。实测 CPU 只用 6/20 核，
+                              串行分片是浪费；每并发约占 4GB 内存，按可用内存设
+mineru_timeout_seconds        单文件总超时；分片后语义落到「每片」
+mineru_render_timeout_seconds MinerU 单批页面渲染超时（MINERU_PDF_RENDER_TIMEOUT），
+                              默认 300 秒常常先炸；大图文档要调高
+mineru_render_threads         MinerU 渲染线程数（MINERU_PDF_RENDER_THREADS）
+max_round_seconds             单轮时间预算：到点本轮收尾，剩余文件留给下一轮（不计失败）
+```
+
+分片产物落 **工作区**（`runtime/mineru-chunks/<会话>/partNNN/`），每片完成后写 `.done`：
+
+```text
+· 重跑时只补缺失片 —— 跑了 2 小时再被中断，已完成的部分不会白跑
+· 会话名 = 源路径 + 大小 + mtime 的哈希：源文件变了自然另起一套，不会串片
+· 合并按片序拼接，图片统一加 partNNN_ 前缀，避免不同片同名图片互相覆盖
+```
+
+排队策略（避免大文档堵住中小文档）：
+
+```text
+tier 0  md/txt/xlsx（轻量，永不排队）
+tier 1  普通重活
+tier 2  首次遇到但 ≥ large_source_mb（默认 20MB）的重活
+tier 3  历史实测 ≥ slow_source_threshold_seconds（默认 600s）的慢文档 ← 排最后
+        （耗时数据来自 logs/conversions.jsonl，成功与失败都记）
+两个阈值都可设为 0 关闭。
+```
+
+⚠️ 锁的过期阈值已与单文件超时挂钩（`max(7200, mineru_timeout_seconds+600)`）：
+实测大文档跑到第 2 小时后锁被判过期、新轮接管锁却**不杀旧进程**，
+出现同一文档两个转换同时在跑、互相抢 CPU。改配置调大超时时不需要再单独考虑锁。
+
 发布件大小核对：zip ≈ 35 MB（含 `tools/uv.exe` 41.5 MB 未压缩前的体积影响）、
 wheel ≈ 210 KB。若明显偏大，先怀疑构建环境混入了开发依赖。
 
