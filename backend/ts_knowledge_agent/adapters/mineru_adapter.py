@@ -178,14 +178,21 @@ class MinerUConverter:
         output.parent.mkdir(parents=True, exist_ok=True)
         total = self._page_count(source) if self.chunk_pages > 0 else 0
         if total <= self.chunk_pages:
-            # 无需分片：整篇转换（保持既有行为，含临时目录清理）
-            work = Path(work_root) if work_root else Path(output.parent / ".mineru-work")
+            # 无需分片：整篇转换。
+            #
+            # work_root 是**所有文档共享**的工作区（converter 传 <工作区>/runtime/mineru-chunks），
+            # 所以这里必须按文档隔离子目录 —— 否则每篇整篇转换的产物都直接落到共享的
+            # work_root/output/ 下，多篇产物混在一起，find_markdown 的「恰好一个 markdown」
+            # 断言随即必然失败：产物其实已生成，却被记成 failed 并无限重试。
+            # （实测：共享目录累积 21 篇产物后，所有不分片文档每轮都失败、每次烧 5-6 分钟。）
+            # 一次转换没有可续传的单元（只有分片才有 .done 标记），因此无论 work_root 是否给出，
+            # 成功后都清理该子目录，避免共享工作区随文档数无限膨胀。
+            work = (Path(work_root) / _session_key(source)) if work_root else Path(output.parent / ".mineru-work")
             work.mkdir(parents=True, exist_ok=True)
             self._run_worker("parse", source, work / "output")
             md = find_markdown(work / "output")
             self._publish_single(md, output)
-            if work_root is None:
-                shutil.rmtree(work, ignore_errors=True)
+            shutil.rmtree(work, ignore_errors=True)
             return
         self._convert_chunked(source, output, total, Path(work_root) if work_root else output.parent / ".mineru-chunks")
 

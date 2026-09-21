@@ -137,3 +137,53 @@ def test_concurrency_respects_memory_and_config() -> None:
     assert 1 <= huge <= 99
     if available_memory_mb() > 0:
         assert huge <= max(1, int(available_memory_mb() * 0.7 / 4500))
+
+
+def test_whole_document_conversion_isolates_from_other_documents(monkeypatch, tmp_path) -> None:
+    """整篇转换不得与共享工作区里其它文档的产物混淆。
+
+    回归：work_root 是**所有文档共享**的（converter 传 <工作区>/runtime/mineru-chunks）。
+    若整篇转换把产物直接落到 work_root/output/，别的文档产物会混进来，
+    find_markdown 的「恰好一个 markdown」断言必然失败 —— 现场表现是
+    「产物其实已生成，却被记成 failed 并无限重试、每次烧 5-6 分钟」。
+    """
+
+    monkeypatch.setattr(mineru_adapter, "WORKER_SCRIPT", FAKE_WORKER)
+    source = tmp_path / "small.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    impl = MinerUConverter(sys.executable, timeout_seconds=120, chunk_pages=100)
+
+    work_root = tmp_path / "chunks"
+    # 预置其它文档遗留的产物，复现「共享目录已被污染」的现场
+    for name in ("other-a", "other-b", "other-c"):
+        leftover = work_root / "output" / name
+        leftover.mkdir(parents=True)
+        (leftover / (name + ".md")).write_text("# 别的文档\n", encoding="utf-8")
+
+    output = tmp_path / "out" / "small.md"
+    impl.convert_to(source, output, work_root=work_root)
+
+    assert output.is_file(), "共享目录里有其它文档产物时，整篇转换仍应成功"
+    body = output.read_text(encoding="utf-8")
+    assert body.startswith("# pages"), f"产物应是本次转换的内容，实际是：{body[:40]!r}"
+
+
+def test_whole_document_conversion_cleans_its_own_work_dir(monkeypatch, tmp_path) -> None:
+    """整篇转换没有可续传的单元，成功后应清理自己的工作区。
+
+    否则共享工作区会随文档数无限膨胀（分片才有 .done 断点，整篇没有）。
+    """
+
+    monkeypatch.setattr(mineru_adapter, "WORKER_SCRIPT", FAKE_WORKER)
+    source = tmp_path / "small.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    impl = MinerUConverter(sys.executable, timeout_seconds=120, chunk_pages=100)
+
+    work_root = tmp_path / "chunks"
+    work_root.mkdir(parents=True)
+    before = {p.name for p in work_root.iterdir()}
+
+    impl.convert_to(source, tmp_path / "out" / "small.md", work_root=work_root)
+
+    after = {p.name for p in work_root.iterdir()}
+    assert after == before, f"整篇转换应清理自身工作区，实际多出：{sorted(after - before)}"
