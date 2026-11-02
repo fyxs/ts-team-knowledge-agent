@@ -6,6 +6,16 @@ from dataclasses import dataclass
 
 from ts_knowledge_agent.services.converter import is_supported
 
+
+# Office 打开文件时生成的锁/临时文件（~$xxx.xlsx、.~lock.xxx#、~WRL0001.tmp）：
+# 内容是二进制锁信息，不是文档，扫描时就该跳过（此前每次转换都报 BadZipFile）。
+TEMPORARY_PREFIXES = ("~$", ".~lock", "~WRL")
+
+
+def is_temporary_file(path: Path) -> bool:
+    return path.name.startswith(TEMPORARY_PREFIXES)
+
+
 @dataclass(frozen=True)
 class SourceFile:
     relative_path: str
@@ -32,6 +42,8 @@ def scan_directory(root: Path) -> list[SourceFile]:
         raise NotADirectoryError(f"source path is not a directory: {root}")
     results: list[SourceFile] = []
     for path in sorted((p for p in root.rglob("*") if p.is_file()), key=lambda p: str(p).lower()):
+        if is_temporary_file(path):
+            continue
         stat = path.stat()
         results.append(SourceFile(str(path.relative_to(root)), path, stat.st_size, stat.st_mtime_ns, sha256_file(path), is_supported(path)))
     return results

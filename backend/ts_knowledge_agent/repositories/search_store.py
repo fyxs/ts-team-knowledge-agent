@@ -12,6 +12,9 @@ CONTENT_WEIGHT = 3.0
 
 CHANNEL_WEIGHTS = (3.0, 1.0, 2.0)  # AND / OR / PATH：路径命中是强信号，需与内容命中同台竞争
 
+# 库被另一个进程（serve / 另一条车道）写入时的等待上限（秒）
+BUSY_TIMEOUT_SECONDS = 30
+
 def query_tokens(text: str) -> list[str]:
     """把自然语言查询切成检索词：中文字符串与英文/数字词，长度至少 2。"""
 
@@ -62,8 +65,19 @@ class SearchStore:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(path)
+        # serve 进程与转换轮会同时打开这个库：默认 5s 超时 + journal_mode=delete 下，
+        # 写入方每轮都在 DELETE FROM documents_fts 处撞 "database is locked"
+        # （实测累计 543 次，整轮因此判 failed、知识仓不提交）。
+        # 加长等待 + WAL（读写可并发）后，读端不再阻塞写端。
+        self.connection = sqlite3.connect(path, timeout=BUSY_TIMEOUT_SECONDS)
         self.connection.row_factory = sqlite3.Row
+        self.connection.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_SECONDS * 1000}")
+        try:
+            self.connection.execute("PRAGMA journal_mode=WAL")
+            self.connection.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.OperationalError:
+            # 切换 WAL 需要短暂独占锁；切换失败就继续用当前模式，不应让打开库失败
+            pass
         self.connection.executescript("""
         CREATE TABLE IF NOT EXISTS documents (
             path TEXT PRIMARY KEY,
@@ -77,6 +91,12 @@ class SearchStore:
         );
         """)
         self.connection.commit()
+
+    def digests(self) -> dict[str, str]:
+        """已索引文档的摘要表：用于跳过未变更文件，避免每轮重写全部 700+ 条（写锁窗口）。"""
+
+        return {row["path"]: row["content_sha256"] for row in self.connection.execute(
+            "SELECT path, content_sha256 FROM documents")}
 
     def upsert(self, path: str, title: str, content: str, sha256: str) -> None:
         title, content = clean_text(title), clean_text(content)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import time
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -126,10 +128,43 @@ def lane_of(source: SourceFile) -> str:
     return LANE_LIGHT if conversion_cost_class(source.absolute_path) == 0 else LANE_HEAVY
 
 
+# 输出路径的绝对长度上限（Windows MAX_PATH=260，扣掉 .tmp/.git 等后缀余量）。
+# 本机 LongPathsEnabled=0，且知识仓要被多台机器 clone：宁可把名字压短，
+# 也不要用 \\?\ 前缀（git / 编辑器 / 浏览器端都不一定认）。
+OUTPUT_PATH_LIMIT = 240
+
+
+def shortened_component(name: str, limit: int) -> str:
+    """把过长的路径片段压到 limit 内：保留可读前缀 + 稳定短哈希，避免同名冲突。"""
+
+    if len(name) <= limit:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+    keep = max(8, limit - len(digest) - 2)
+    return name[:keep].rstrip(" ._") + "~" + digest
+
+
 def output_path_for(settings: Settings, relative_path: str) -> Path:
+    """成员知识落点：members/<成员>/<相对目录>/<标题>/<标题>.md。
+
+    飞书导出的目录名与文件名同名（<标题>/<标题>.md），再套一层就变成三段重复，
+    长标题时绝对路径会超过 260 —— 实测 shutil.copy2 直接报 FileNotFoundError [WinError 3]，
+    且该文件每轮重试都失败。这里按需把标题片段整体压短（目录、子目录、文件名同时生效）。
+    """
+
     relative=Path(relative_path)
-    document_dir=settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace / relative.parent / relative.stem
-    return document_dir / f"{relative.stem}.md"
+    base=settings.shared_knowledge_repository_directory / "members" / settings.personal_workspace
+    stem=relative.stem
+    parent=relative.parent
+    candidate=base / parent / stem / f"{stem}.md"
+    if len(str(candidate)) <= OUTPUT_PATH_LIMIT:
+        return candidate
+    over=len(str(candidate)) - OUTPUT_PATH_LIMIT
+    # 标题同时出现在：父目录名（仅当与标题同名）、子目录名、文件名
+    factor=3 if parent.name == stem else 2
+    short_stem=shortened_component(stem, max(12, len(stem) - math.ceil(over / factor)))
+    short_parent=parent.parent / short_stem if parent.name == stem else parent
+    return base / short_parent / short_stem / f"{short_stem}.md"
 
 def run_once(settings: Settings, sync: bool=False, batch_size:int=25, converter=None, on_batch:Callable[[ProcessingBatch],None]|None=None, lane: str=LANE_ALL)->RunSummary:
     """跑一轮。lane=light/heavy 时只处理该车道的来源，并使用该车道自己的锁。"""
