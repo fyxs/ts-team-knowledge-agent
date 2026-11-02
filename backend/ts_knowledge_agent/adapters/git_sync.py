@@ -16,8 +16,12 @@ class GitSyncError(RuntimeError):
     pass
 
 
-STAGED_PATHS = ("members", "governance")
-"""随同步提交的顶层目录：成员知识与成员治理记录。"""
+STAGED_PATHS = ("members", "governance", "registries")
+"""随同步提交的顶层目录：成员知识、成员治理记录与派生登记表。
+
+registries 是每轮重新生成的派生数据，且本来就在版本控制里；
+不一起提交会让工作区永远脏着，下一轮 prepare_repository 直接判 blocked_dirty_worktree。
+"""
 
 
 def _stage(repo: Path) -> None:
@@ -125,7 +129,16 @@ def sync_repository(repo: Path, message: str) -> SyncResult:
     try:
         _git(repo, "push", "origin", f"HEAD:refs/heads/{branch}")
     except GitSyncError as exc:
-        return SyncResult("push_failed", commit=commit, message=str(exc))
+        # 并发轮次（serve 内循环 + 计划任务）可能同时推送，后到的被拒为非快进。
+        # 重新 fetch + rebase 再试一次，不要直接把这一轮判成失败。
+        try:
+            _git(repo, "fetch", "origin")
+            if _git(repo, "rev-list", "--count", f"HEAD..origin/{branch}") != "0":
+                _git(repo, "rebase", f"origin/{branch}")
+            _git(repo, "push", "origin", f"HEAD:refs/heads/{branch}")
+            commit = _git(repo, "rev-parse", "HEAD")
+        except GitSyncError as retry_exc:
+            return SyncResult("push_failed", commit=commit, message=str(exc) + " | retry: " + str(retry_exc))
     return SyncResult("pushed", commit=commit)
 
 
