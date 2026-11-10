@@ -4,11 +4,12 @@ from pathlib import Path
 import shutil
 from typing import Protocol
 from ts_knowledge_agent.adapters.mineru_adapter import MinerUConverter
-from ts_knowledge_agent.adapters.excel_adapter import convert_excel
+from ts_knowledge_agent.adapters.excel_adapter import convert_excel, convert_legacy_excel
 from ts_knowledge_agent.adapters.word_adapter import extract_doc_text, markdown_from_word_text
 
 CONVERTER_VERSION = "mineru-3.4.5"
 CONVERTER_DOC = CONVERTER_VERSION + "+word-text"
+CONVERTER_XLS = CONVERTER_VERSION + "+xlrd"
 CONVERTER_MARKDOWN_COPY = "markdown-copy"
 CONVERTER_TEXT_DECODE = "text-decode"
 CONVERTER_EXCEL = "excel-adapter"
@@ -85,6 +86,10 @@ def convert_file(source: Path, output: Path, converter: Converter | None = None,
     elif extension == ".xlsx":
         convert_excel(source, output)
         origin = ORIGIN_TOOL; label = CONVERTER_EXCEL
+    elif extension == ".xls":
+        # .xls 是 Excel 97-2003 的 OLE 二进制，不是 PDF；MinerU 读不了（每篇白烧数分钟）
+        convert_legacy_excel(source, output)
+        origin = ORIGIN_TOOL; label = CONVERTER_XLS
     elif extension == ".doc":
         # .doc 是 OLE 复合文档：MinerU 读不了，Word 导出的 PDF 又会被 DLP 加密
         # → 用 Word 抽正文（COM 走内存，不落盘），自己写 markdown

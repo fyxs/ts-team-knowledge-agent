@@ -141,6 +141,61 @@ def _write_sheets(sheets, output: Path, sheets_dir: Path, max_rows: int) -> int:
     return output.stat().st_size + total
 
 
+def _xlrd_value(cell) -> object:
+    """xlrd 单元格 → 便于写表的值（日期转 ISO，整数不带 .0）。"""
+
+    import xlrd
+
+    if cell.ctype == xlrd.XL_CELL_DATE:
+        try:
+            return xlrd.xldate.xldate_as_datetime(cell.value, 0).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return cell.value
+    if cell.ctype == xlrd.XL_CELL_NUMBER:
+        return int(cell.value) if float(cell.value).is_integer() else cell.value
+    if cell.ctype == xlrd.XL_CELL_BOOLEAN:
+        return "TRUE" if cell.value else "FALSE"
+    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+        return ""
+    return cell.value
+
+
+def _xlrd_sheets(source: Path):
+    """读 Excel 97-2003（.xls，OLE 复合文档）。
+
+    这类文件不是 PDF，MinerU 的 pdfium 通道读不了 —— 实测每个文件白烧 143~435 秒后
+    RuntimeError（2026-11-10 一轮 286 次失败全是它）。xlrd 直接读二进制，毫秒级。
+    """
+
+    import xlrd
+
+    workbook = xlrd.open_workbook(str(source), on_demand=True)
+    try:
+        for index in range(workbook.nsheets):
+            sheet = workbook.sheet_by_index(index)
+            rows = [
+                [_xlrd_value(sheet.cell(row, column)) for column in range(sheet.ncols)]
+                for row in range(sheet.nrows)
+            ]
+            yield sheet.name, rows
+    finally:
+        workbook.release_resources()
+
+
+def convert_legacy_excel(source: Path, output: Path, max_rows: int = DEFAULT_SHEET_ROWS) -> int:
+    """.xls 转换：xlrd 读表 → 与 .xlsx 相同的 markdown 分表写入。"""
+
+    if max_rows < 1:
+        raise ValueError("Excel sheet row limit must be at least 1")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    sheets_dir = output.parent / "sheets"
+    sheets_dir.mkdir(exist_ok=True)
+    try:
+        return _write_sheets(_xlrd_sheets(source), output, sheets_dir, max_rows)
+    except Exception as exc:
+        raise RuntimeError(f"旧版 Excel 读取失败（{source.name}）：{exc}") from exc
+
+
 def convert_excel(source: Path, output: Path, max_rows: int = DEFAULT_SHEET_ROWS) -> int:
     if max_rows < 1:
         raise ValueError("Excel sheet row limit must be at least 1")
