@@ -306,3 +306,21 @@ mis/mos/mes 的 Hermes 环境里；不得进入发布件，也不得进入用户
 - 应用自身的埋点（usage）属于产品设计、经用户批准，写本地并经共享仓汇总，
   与"运维脚本"是两回事，不要混为一谈；
 - 新增运维脚本时，落点固定为各机 Hermes 环境（mis/mos/mes），并在文档里写明它跑在哪台机器。
+
+## 转换通道：OLE 复合文档不要交给 MinerU
+
+`.doc` 与 `.xls` 都是 OLE 复合文档（文件头 `D0 CF 11 E0`），不是 PDF。
+MinerU 走 pdfium 通道读它们会失败：实测每篇白烧 90~435 秒后 `RuntimeError: Failed to load document`
+（2026-11-10 一天 286 次 .xls 全失败，累计浪费数小时）。
+
+正确做法：
+- `.doc` → Word COM 抽正文（子进程调用，COM 返回值走内存），自己写 markdown；
+  不要先转 PDF/docx 再交给 MinerU —— 本机 E-SafeNet 会把 Word 写出的文件透明加密，
+  MinerU 的独立 venv 读到密文（`Unknown file suffix`）。
+- `.xls` → xlrd 直读二进制，复用 `.xlsx` 的 markdown 分表写入（实测 0.04~0.34 秒/篇）。
+- 新增格式前先验证「首 4 字节是不是 `%PDF`」：不是 PDF 的格式一律不要走 MinerU 通道。
+
+判断依据看 `logs/conversions.jsonl` 的 `converter` 字段：
+出现 `mineru-3.4.5`（无后缀）说明该文件被错误地送进了 MinerU 通道，
+`+word-text` / `+xlrd` 才是对应格式的正确通道。
+
