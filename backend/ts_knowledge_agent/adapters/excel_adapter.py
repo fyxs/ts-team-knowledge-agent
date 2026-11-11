@@ -26,8 +26,29 @@ def _column_index(letters: str) -> int:
     return index - 1
 
 
+def _has_cached_values(source: Path) -> bool:
+    """判断 xlsx 里公式是否带缓存值。
+
+    Agent 读知识库要的是「人打开 Excel 看到的数」，不是 =VLOOKUP(...) 的源码。
+    但程序生成的 xlsx 可能没有缓存值，此时 data_only=True 会读出一片空白，
+    所以要先探测：只有存在公式且没有 <v> 缓存时，才退回读公式。
+    """
+
+    try:
+        with zipfile.ZipFile(source) as archive:
+            for name in archive.namelist():
+                if not name.startswith("xl/worksheets/") or not name.endswith(".xml"):
+                    continue
+                data = archive.read(name)
+                if b"<f>" in data or b"<f " in data:
+                    return b"<v>" in data
+            return True
+    except Exception:
+        return True
+
+
 def _openpyxl_sheets(source: Path):
-    workbook = load_workbook(source, read_only=True, data_only=False)
+    workbook = load_workbook(source, read_only=True, data_only=_has_cached_values(source))
     for worksheet in workbook.worksheets:
         yield worksheet.title, worksheet.iter_rows(values_only=True)
 
@@ -97,15 +118,42 @@ def _zip_sheets(source: Path):
             yield title, rows
 
 
+def _trim_row(row) -> list | None:
+    """去掉行尾的空单元格；整行为空则返回空列表（由调用方决定是否跳过）。
+
+    xlsx 因格式残留常把整表撑到 16384 列，未修剪时一个 sheet 能写出 5MB 空列。
+    """
+
+    if row is None:
+        return None
+    values = list(row)
+    while values and (values[-1] is None or (isinstance(values[-1], str) and not values[-1].strip())):
+        values.pop()
+    return values
+
+
+def _safe_sheet_name(title: str, sheet_index: int) -> str:
+    """把 sheet 名变成合法文件名：只去掉 Windows 禁止的字符，保留中文。
+
+    历史缺陷：早期正则写成 [^0-9A-Za-z_-]+ → "_"，把中文名全部清空，
+    于是同一文件里所有中文 sheet 都落到同一个 Sheet1.md，后者覆盖前者。
+    实测 附件2.1 23 张只剩 3 张、附件2.2 26 张只剩 2 张，共丢 151 张表。
+    """
+
+    safe = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", title).strip(" .")
+    safe = re.sub(r"\s+", " ", safe)
+    return safe or f"Sheet{sheet_index}"
+
+
 def _write_sheets(sheets, output: Path, sheets_dir: Path, max_rows: int) -> int:
     index = [f"# {output.stem}", "", "## Sheets", ""]
     total = 0
-    for title, rows in sheets:
+    used: set[str] = set()
+    for sheet_index, (title, rows) in enumerate(sheets, start=1):
         iterator = iter(rows)
-        header = next(iterator, None)
+        header = _trim_row(next(iterator, None))
         if header is None:
             continue
-        headers = [_clean(value) or f"Column{position + 1}" for position, value in enumerate(header)]
         chunk: list = []
         part = 1
         files: list[Path] = []
@@ -115,13 +163,27 @@ def _write_sheets(sheets, output: Path, sheets_dir: Path, max_rows: int) -> int:
             nonlocal chunk, part, total
             if not chunk:
                 return
-            safe = re.sub(r"[^0-9A-Za-z_-]+", "_", title).strip("_") or f"Sheet{part}"
-            name = f"{safe}.md" if part == 1 else f"{safe}-{part:03d}.md"
+            # 列宽按本批真实内容取：xlsx 常因格式把 max_column 撑到 16384，
+            # 直接照抄会生成几十万个空 ColumnN，一个 sheet 就能到 5MB。
+            width = max([len(header)] + [len(row) for row in chunk])
+            headers = [_clean(value) or f"Column{position + 1}"
+                       for position, value in enumerate(list(header) + [None] * (width - len(header)))]
+            base_name = _safe_sheet_name(title, sheet_index)
+            safe = base_name if part == 1 else f"{base_name}-{part:03d}"
+            # 同名冲突兜底：极少数文件里两个 sheet 名只差非法字符，归一后相同
+            unique = safe
+            bump = 2
+            while unique in used:
+                unique = f"{safe}-dup{bump}"
+                bump += 1
+            used.add(unique)
+            name = f"{unique}.md"
             target = sheets_dir / name
             lines = [f"# {title}" if part == 1 else f"# {title} (part {part})", "",
                      "| " + " | ".join(headers) + " |",
                      "|" + "|".join("---" for _ in headers) + "|"]
-            lines += ["| " + " | ".join(_clean(value) for value in row[:len(headers)]) + " |" for row in chunk]
+            lines += ["| " + " | ".join(_clean(value) for value in list(row) + [None] * (width - len(row))) + " |"
+                      for row in chunk]
             target.write_text("\n".join(lines) + "\n", encoding="utf-8")
             files.append(target)
             total += target.stat().st_size
@@ -129,7 +191,7 @@ def _write_sheets(sheets, output: Path, sheets_dir: Path, max_rows: int) -> int:
             part += 1
 
         for row in iterator:
-            chunk.append(row)
+            chunk.append(_trim_row(row))
             data_rows += 1
             if len(chunk) >= max_rows:
                 flush()

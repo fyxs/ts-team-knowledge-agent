@@ -32,7 +32,9 @@ def test_legacy_xls_is_converted_with_xlrd(real_xls: Path, tmp_path: Path) -> No
     assert "## Sheets" in body, "索引页要有 sheets 清单"
     parts = sorted((output.parent / "sheets").glob("*.md"))
     assert parts, "至少产出一个分表"
-    table = parts[0].read_text(encoding="utf-8")
+    # 分表按 max_rows 切块，文件名形如「采暖分项能耗.md」与「采暖分项能耗-002.md」；
+    # 英文排序会把 -002 排在 .md 之前，所以必须合并全部块再断言，否则只看到后半段。
+    table = "".join(part.read_text(encoding="utf-8") for part in parts)
     assert table.startswith("# "), "分表要有标题"
     assert "|" in table, "必须是 markdown 表格"
     # 日期列可能是 xlrd 的日期单元格（转成 2023-11-01 00:00）或纯文本（2023/11/01 00:00:00），
