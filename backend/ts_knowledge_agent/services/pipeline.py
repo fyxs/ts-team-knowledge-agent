@@ -21,6 +21,7 @@ from ts_knowledge_agent.services.converter import (
 from ts_knowledge_agent.services.postprocess import ensure_markdown_title
 from ts_knowledge_agent.services.indexing import index_converted
 from ts_knowledge_agent.services.scanner import SourceFile, scan_directory
+from ts_knowledge_agent.services import dedup
 from ts_knowledge_agent.services.run_lock import RunLock
 from ts_knowledge_agent.services.quality import inspect_markdown_file
 from ts_knowledge_agent.services.usage import rollup_usage
@@ -110,6 +111,7 @@ class RunSummary:
     skipped:int=0
     failed:int=0
     missing:int=0
+    duplicates:int=0
     indexed:int=0
     sync_status:str="disabled"
     reason_counts: dict[str,int] = field(default_factory=dict)
@@ -215,6 +217,14 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         seen={source.relative_path for source in sources}
         for source in sources: state.upsert_source(source)
         state.backfill_source_statuses()
+        # 入库前查重：先补指纹（增量，只算变过的文件），再算重复组。
+        dedup.refresh_index(state, sources)
+        ingested = state.ingested_paths()
+        dup_of = dedup.duplicate_map(
+            dedup.find_duplicate_groups([dict(row) for row in state.list_fingerprints()],
+                                        ingested=ingested)
+        )
+        duplicate_count = 0
         pending=[]
         excluded=set(settings.excluded_source_paths)
         for source in sources:
@@ -222,11 +232,20 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
                 reason_counts["excluded"]=reason_counts.get("excluded",0)+1
                 state.update_source_status(source.relative_path,"ignored")
                 continue
-            reason="unsupported" if not source.supported else state.conversion_reason(source)
-            reason_counts[reason]=reason_counts.get(reason,0)+1
             if not source.supported:
+                reason_counts["unsupported"]=reason_counts.get("unsupported",0)+1
                 state.update_source_status(source.relative_path,"ignored")
-            elif reason!="unchanged":
+                continue
+            canonical=dup_of.get(source.relative_path)
+            if canonical and source.relative_path not in ingested:
+                # 内容已在库里（canonical）→ 不重复转换，源文件原样保留
+                state.update_source_status(source.relative_path,"duplicate")
+                reason_counts["duplicate"]=reason_counts.get("duplicate",0)+1
+                duplicate_count+=1
+                continue
+            reason=state.conversion_reason(source)
+            reason_counts[reason]=reason_counts.get(reason,0)+1
+            if reason!="unchanged":
                 if lane != LANE_ALL and lane_of(source) != lane:
                     # 另一条车道的活：不改状态、不计失败，留给它自己处理
                     reason_counts["deferred_to_other_lane"]=reason_counts.get("deferred_to_other_lane",0)+1
@@ -343,5 +362,5 @@ def _run_once_locked(settings: Settings, sync: bool=False, batch_size:int=25, co
         if sync:
             if reason_counts.get("blocked_secret"): sync_status="blocked_secret"
             else: sync_status=sync_repository(settings.shared_knowledge_repository_directory,"Sync knowledge from conversion run").status
-        return RunSummary(scanned=len(sources),queued=len(pending),batches=len(batches),converted=converted,warned=warned,skipped=skipped,failed=failed,missing=missing,indexed=indexed,sync_status=sync_status,reason_counts=reason_counts)
+        return RunSummary(scanned=len(sources),queued=len(pending),batches=len(batches),converted=converted,warned=warned,skipped=skipped,failed=failed,missing=missing,duplicates=duplicate_count,indexed=indexed,sync_status=sync_status,reason_counts=reason_counts)
     finally: state.close()

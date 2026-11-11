@@ -187,6 +187,9 @@ def build_parser() -> argparse.ArgumentParser:
     prune.add_argument("--apply", action="store_true", help="真正执行清理（默认只出计划）")
     schemas = sub.add_parser("schemas")
     schemas.add_argument("--output", required=True, type=Path)
+    dedup_parser = sub.add_parser("dedup", help="列出入库前查重结果（只读，不改源文件）")
+    dedup_parser.add_argument("--json", action="store_true", help="以 JSON 输出")
+    dedup_parser.add_argument("--shared-source-directory", type=Path, default=None)
 
     return parser
 
@@ -386,13 +389,48 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise
         print(
             f"scanned={summary.scanned} queued={summary.queued} batches={summary.batches} converted={summary.converted} "
-            f"skipped={summary.skipped} failed={summary.failed} missing={summary.missing} indexed={summary.indexed} "
+            f"skipped={summary.skipped} failed={summary.failed} missing={summary.missing} duplicates={summary.duplicates} indexed={summary.indexed} "
             f"sync={summary.sync_status}"
         )
         return 1 if summary.failed or summary.sync_status in {"blocked_conflict", "push_failed"} else 0
 
     if args.command == "schedule":
         return run_scheduler(settings)
+
+    if args.command == "dedup":
+        from ts_knowledge_agent.services import dedup as dedup_service
+
+        state = StateStore(settings.shared_knowledge_repository_directory / "data" / "state.sqlite3")
+        try:
+            sources = scan_directory(args.shared_source_directory or settings.shared_source_directory)
+            dedup_service.refresh_index(state, sources)
+            groups = dedup_service.find_duplicate_groups(
+                [dict(row) for row in state.list_fingerprints()],
+                ingested=state.ingested_paths(),
+            )
+        finally:
+            state.close()
+        if args.json:
+            _print([
+                {
+                    "kind": group.kind,
+                    "canonical": group.canonical,
+                    "duplicates": list(group.duplicates),
+                    "newer_export": list(group.newer_export),
+                }
+                for group in groups
+            ])
+        elif not groups:
+            print("duplicates=0")
+        else:
+            print(f"duplicate_groups={len(groups)}")
+            for group in groups:
+                print(f"[{group.kind}] keep: {group.canonical}")
+                for member in group.duplicates:
+                    print(f"    dup: {member}")
+                for member in group.newer_export:
+                    print(f"    newer_export (人工确认): {member}")
+        return 0
 
     if args.command == "serve":
         from ts_knowledge_agent.api.main import resolve_web_dist

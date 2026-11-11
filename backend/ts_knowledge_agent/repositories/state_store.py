@@ -20,7 +20,35 @@ class StateStore:
         columns={row[1] for row in self.connection.execute("PRAGMA table_info(conversions)")}
         if "reason" not in columns: self.connection.execute("ALTER TABLE conversions ADD COLUMN reason TEXT")
         if "warning_message" not in columns: self.connection.execute("ALTER TABLE conversions ADD COLUMN warning_message TEXT")
+        self.connection.executescript("""
+        CREATE TABLE IF NOT EXISTS fingerprints(
+            relative_path TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            value TEXT NOT NULL,
+            exported_at TEXT,
+            content_sha256 TEXT,
+            size INTEGER NOT NULL,
+            mtime_ns INTEGER NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_fingerprints_key ON fingerprints(kind,value);
+        CREATE INDEX IF NOT EXISTS idx_fingerprints_content ON fingerprints(content_sha256);
+        """)
         self.connection.commit()
+    def fingerprint_row(self,relative_path:str)->sqlite3.Row|None:
+        return self.connection.execute("SELECT * FROM fingerprints WHERE relative_path=?",(relative_path,)).fetchone()
+    def upsert_fingerprint(self,relative_path:str,kind:str,value:str,exported_at:str,content_sha256:str,size:int,mtime_ns:int)->None:
+        self.connection.execute("""INSERT INTO fingerprints(relative_path,kind,value,exported_at,content_sha256,size,mtime_ns) VALUES(?,?,?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET kind=excluded.kind,value=excluded.value,exported_at=excluded.exported_at,content_sha256=excluded.content_sha256,size=excluded.size,mtime_ns=excluded.mtime_ns,updated_at=CURRENT_TIMESTAMP""",(relative_path,kind,value,exported_at,content_sha256,size,mtime_ns)); self.connection.commit()
+    def list_fingerprints(self)->list[sqlite3.Row]:
+        return list(self.connection.execute("SELECT * FROM fingerprints ORDER BY relative_path"))
+    def prune_fingerprints(self,keep_paths:set[str])->int:
+        rows=self.connection.execute("SELECT relative_path FROM fingerprints").fetchall(); stale=[r["relative_path"] for r in rows if r["relative_path"] not in keep_paths]
+        if stale:
+            self.connection.executemany("DELETE FROM fingerprints WHERE relative_path=?",[(p,) for p in stale]); self.connection.commit()
+        return len(stale)
+    def ingested_paths(self)->set[str]:
+        rows=self.connection.execute("SELECT relative_path FROM conversions WHERE status IN ('converted','quality_warned')").fetchall()
+        return {r["relative_path"] for r in rows}
     def upsert_source(self,source:SourceFile,status:str="discovered")->None:
         self.connection.execute("""INSERT INTO sources(relative_path,size,mtime_ns,sha256,status) VALUES(?,?,?,?,?) ON CONFLICT(relative_path) DO UPDATE SET size=excluded.size,mtime_ns=excluded.mtime_ns,sha256=excluded.sha256,status=CASE WHEN sources.sha256=excluded.sha256 THEN sources.status ELSE excluded.status END,updated_at=CURRENT_TIMESTAMP""",(source.relative_path,source.size,source.mtime_ns,source.sha256,status)); self.connection.commit()
     def update_source_status(self,relative_path:str,status:str)->None:
