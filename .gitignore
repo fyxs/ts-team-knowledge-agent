@@ -37,3 +37,7 @@ pyi-work/
 codeintel/*
 !codeintel/README.md
 .venv-build/
+
+# 手工备份文件不入库
+*.bak
+*.bak-*
